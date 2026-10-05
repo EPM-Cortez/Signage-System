@@ -1,0 +1,50 @@
+# Local SDK and dependency caches
+.dotnet/
+.dotnet-home/
+.dotnet-install.ps1
+.nuget/
+.npm-cache/
+artifacts/
+node_modules/
+
+# Runtime data
+.local-data/
+backups/
+
+# Build output
+bin/
+obj/
+dist/
+TestResults/
+playwright-report/
+test-results/
+output/
+**/.cache/
+**/.browsers/
+
+# IDE and OS files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Production secrets and local overrides
+appsettings.Local.json
+appsettings.Production.json
+appsettings.*.Local.json
+.env
+.env.*
+!.env.example
+src/Signage.Web/wwwroot/player/
+*.pptx
+*.pptm
+*.ppt
+*.db
+*.db-shm
+*.db-wal
+*.pfx
+*.key
+*.pem

@@ -1,0 +1,15 @@
+@page
+@model ErrorModel
+@{
+    ViewData["Title"] = "Error";
+}
+<section class="card status-card is-failed">
+    <div class="status-mark" aria-hidden="true">@Icons.Get("alert", "icon-failed")</div>
+    <h1>Something went wrong</h1>
+    <p>The request could not be completed. Try again, or contact IT if it keeps happening.</p>
+    @if (Model.ShowRequestId)
+    {
+        <p class="subtle">Request ID <code>@Model.RequestId</code></p>
+    }
+    <div class="status-actions"><a class="btn btn-secondary" href="/">Go to the start page</a></div>
+</section>

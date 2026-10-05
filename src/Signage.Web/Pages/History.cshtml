@@ -1,0 +1,49 @@
+@page
+@using Signage.Domain
+@inject Signage.Web.Services.SlidePosters Posters
+@model HistoryModel
+@{
+    var isAdmin = User.IsInRole("SignageAdmin");
+    ViewData["Title"] = isAdmin ? "Upload history" : "My presentations";
+    var now = DateTimeOffset.UtcNow;
+}
+<header class="page-head">
+    <h1>@ViewData["Title"]</h1>
+    <div class="page-actions"><a class="btn btn-primary" asp-page="/Publish">@Icons.Get("upload")Upload a presentation</a></div>
+</header>
+@if (Model.Items.Count == 0)
+{
+    <div class="card empty">
+        @Icons.Get("slides")
+        <strong>No presentations yet</strong>
+    </div>
+}
+else
+{
+    <div class="library">
+        @foreach (var item in Model.Items)
+        {
+            var poster = Posters.GetUrl(item);
+            var ready = item.Status == PresentationVersionStatus.Ready;
+            <a class="card library-item" href="@(ready && item.ContentId is not null ? $"/Preview/{item.Id}" : $"/Status/{item.Id}")">
+                @if (poster is not null)
+                {
+                    <div class="thumb"><img src="@poster" alt="" loading="lazy" /></div>
+                }
+                else
+                {
+                    var tone = item.Status == PresentationVersionStatus.Failed ? "is-failed" : ready ? "" : "is-busy";
+                    <div class="thumb thumb-empty @tone">@Icons.Get(item.Status == PresentationVersionStatus.Failed ? "alert" : "slides")</div>
+                }
+                <div class="library-body">
+                    <h2>@item.Presentation.Name</h2>
+                    <span class="subtle">@item.OriginalFileName</span>
+                    <div class="library-foot">
+                        <span class="pill pill-@Display.StatusTone(item.Status)">@Model.FriendlyStatus(item.Status)</span>
+                        <span class="subtle" title="@Display.DateTime(item.CreatedUtc)">@(item.SlideCount > 0 ? $"{item.SlideCount} slides · " : "")@Display.Ago(item.CreatedUtc, now)</span>
+                    </div>
+                </div>
+            </a>
+        }
+    </div>
+}

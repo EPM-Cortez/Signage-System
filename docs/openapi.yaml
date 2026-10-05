@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: School Signage machine API
+  version: 1.0.0
+  description: Human mutations also require the antiforgery token emitted by the portal.
+servers:
+  - url: /
+paths:
+  /api/presentations:
+    post:
+      summary: Upload and queue a PowerPoint
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, screenGroupIds]
+              properties:
+                file: { type: string, format: binary }
+                name: { type: string, maxLength: 200 }
+                screenGroupIds: { type: array, items: { type: string, format: uuid } }
+                publishWhenReady: { type: boolean, default: true }
+      responses:
+        '202': { description: Durable conversion job created }
+        '400': { description: Invalid or rejected upload }
+        '403': { description: Group is not authorised }
+  /api/presentation-versions/{versionId}/status:
+    get:
+      summary: Read conversion/publication status
+      security: [{ cookieAuth: [] }]
+      parameters: [{ in: path, name: versionId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Status }, '404': { description: Not found } }
+  /api/player/pairing-sessions:
+    post:
+      summary: Begin player pairing
+      responses: { '200': { description: Temporary token and six-digit code } }
+  /api/player/pairing-sessions/{sessionId}:
+    get:
+      summary: Poll pairing state and receive the device token once
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: path, name: sessionId, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Pairing state }, '401': { description: Expired or invalid token } }
+  /api/player/assignment:
+    get:
+      summary: Get the active and next content assignment
+      security: [{ bearerAuth: [] }]
+      parameters: [{ in: header, name: If-None-Match, required: false, schema: { type: string } }]
+      responses: { '200': { description: Assignment }, '304': { description: Assignment unchanged }, '401': { description: Invalid or revoked device } }
+  /api/player/heartbeat:
+    post:
+      summary: Report playback/device state
+      security: [{ bearerAuth: [] }]
+      responses: { '204': { description: Recorded }, '401': { description: Invalid or revoked device } }
+  /content/{contentId}/{assetPath}:
+    get:
+      summary: Fetch an authorised immutable manifest or asset
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: contentId, required: true, schema: { type: string, pattern: '^[a-fA-F0-9]{64}$' } }
+        - { in: path, name: assetPath, required: true, schema: { type: string } }
+      responses: { '200': { description: Immutable content }, '401': { description: Invalid device }, '403': { description: Content not assigned } }
+  /health/live:
+    get: { summary: Process liveness, responses: { '200': { description: Live } } }
+  /health/ready:
+    get: { summary: SQLite, storage, free-space, and converter readiness, responses: { '200': { description: Ready or degraded }, '503': { description: Unhealthy } } }
+components:
+  securitySchemes:
+    cookieAuth: { type: apiKey, in: cookie, name: __Host-SchoolSignage }
+    bearerAuth: { type: http, scheme: bearer }

@@ -1,0 +1,9 @@
+@page
+@model Signage.Web.Pages.AccessPendingModel
+@{ ViewData["Title"] = "Awaiting approval"; }
+<header class="page-head"><h1>Awaiting approval</h1></header>
+<section class="card card-body form-stack">
+    <p>You are signed in, but your account has not been given signage permissions yet.</p>
+    <p>Ask IT to choose your role and screen groups under <strong>Staff access</strong>. Once approved, refresh this page to start uploading.</p>
+    <a class="btn btn-primary" asp-page="/AccessPending">Check access</a>
+</section>

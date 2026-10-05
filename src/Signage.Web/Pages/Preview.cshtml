@@ -1,0 +1,75 @@
+@page "{versionId:guid}"
+@model Signage.Web.Pages.PreviewModel
+@{
+    ViewData["Title"] = Model.PresentationName;
+    var isAdmin = User.IsInRole("SignageAdmin");
+    var items = Model.Manifest.Items;
+    var slideCount = items.Select(item => item.SourceSlideNumber).Distinct().Count();
+    var hasMedia = items.Any(item => item.Type != "image");
+    var loopMs = items.Where(item => item.Type == "image").Sum(item => (long)item.DurationMs);
+    var assetBase = $"/api/presentation-versions/{Model.VersionId}/preview/";
+}
+@if (isAdmin)
+{
+    <a class="back-link" asp-page="/Admin/Presentations">@Icons.Get("arrow-left")Presentations</a>
+}
+else
+{
+    <a class="back-link" asp-page="/History">@Icons.Get("arrow-left")My presentations</a>
+}
+<header class="page-head">
+    <div class="page-title">
+        <h1>@Model.PresentationName</h1>
+        <span class="tag">@slideCount @(slideCount == 1 ? "slide" : "slides")</span>
+        @if (loopMs > 0)
+        {
+            <span class="tag">@Display.Duration(loopMs)@(hasMedia ? " + video" : "") per loop</span>
+        }
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" type="button" data-viewer-start>@Icons.Get("play")Play</button>
+    </div>
+</header>
+<div class="slide-grid">
+    @for (var index = 0; index < items.Count; index++)
+    {
+        var item = items[index];
+        var poster = item.Background?.Asset ?? item.Asset;
+        var label = $"Slide {item.SourceSlideNumber}";
+        <button class="slide" type="button" data-slide data-index="@index" data-type="@item.Type" data-src="@(assetBase + poster)" data-video="@(item.Type == "video" ? assetBase + item.Asset : null)" data-duration="@item.DurationMs" data-label="@label" aria-label="View @label">
+            <span class="thumb">
+                <img src="@(assetBase + poster)" alt="" loading="lazy" />
+                @if (item.Type == "video")
+                {
+                    <span class="thumb-badge">@Icons.Get("video")Video</span>
+                }
+                else if (item.Type == "youtube")
+                {
+                    <span class="thumb-badge">@Icons.Get("globe")YouTube</span>
+                }
+            </span>
+            <span class="slide-caption">
+                <strong>@label</strong>
+                <span>@(item.Type == "image" ? Display.Duration(item.DurationMs) : item.Type == "youtube" ? "Needs internet" : "Plays to the end")</span>
+            </span>
+        </button>
+    }
+</div>
+
+<dialog class="viewer" data-viewer aria-label="Slide viewer">
+    <button class="icon-button viewer-close" type="button" data-viewer-close aria-label="Close viewer">@Icons.Get("x")</button>
+    <div class="viewer-stage">
+        <img data-viewer-image alt="" />
+        <video class="hidden" data-viewer-video muted playsinline></video>
+        <span class="viewer-note hidden" data-viewer-note></span>
+    </div>
+    <div class="viewer-bar">
+        <div class="viewer-progress" aria-hidden="true"><span data-viewer-progress></span></div>
+        <button class="icon-button" type="button" data-viewer-prev aria-label="Previous slide">@Icons.Get("chevron-left")</button>
+        <button class="icon-button" type="button" data-viewer-play aria-label="Pause">@Icons.Get("pause", "icon-pause")@Icons.Get("play", "icon-play hidden")</button>
+        <span class="viewer-count" data-viewer-count></span>
+        <button class="icon-button" type="button" data-viewer-next aria-label="Next slide">@Icons.Get("chevron-right")</button>
+        <button class="icon-button" type="button" data-viewer-fullscreen aria-label="Full screen">@Icons.Get("expand")</button>
+    </div>
+</dialog>
+@section Scripts { <script src="~/js/preview.js" asp-append-version="true" defer></script> }

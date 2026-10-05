@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#000000" />
+  <title>School Signage Player</title>
+</head>
+<body>
+  <main id="player" class="player" aria-live="polite">
+    <section id="message" class="message">
+      <p id="message-label">Starting player…</p>
+      <strong id="pairing-code" class="pairing-code" hidden></strong>
+      <small id="message-detail"></small>
+    </section>
+    <div id="slide-stage" class="slide-stage">
+    <img id="image-a" class="media" alt="" />
+    <img id="image-b" class="media" alt="" />
+    <video id="video" class="media" muted playsinline preload="auto"></video>
+    <div id="youtube-host" class="youtube-host"></div>
+    </div>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

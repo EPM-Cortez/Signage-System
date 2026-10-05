@@ -1,0 +1,36 @@
+@page
+@model Signage.Web.Pages.Admin.DirectoryModel
+@{ Layout = "_AdminLayout"; ViewData["Title"] = "Active Directory"; }
+<header class="page-head"><h1>Active Directory</h1><a class="btn btn-secondary" asp-page="/Admin/Access">Staff access</a></header>
+<div class="stack">
+    <section class="card flush">
+        <div class="card-head"><h2>Connection configuration</h2><span class="pill @(Model.Settings.IsConfigured ? "pill-good" : "pill-warn")">@(Model.Settings.IsConfigured ? "Configured (not yet tested)" : "Not configured")</span></div>
+        <dl class="facts">
+            <dt>Sign-in method</dt><dd>@Model.AuthenticationMode</dd>
+            <dt>Domain controller</dt><dd>@(Model.Settings.IsConfigured ? Model.Settings.Host + ":" + Model.Settings.Port : "Not set")</dd>
+            <dt>Directory domain</dt><dd>@Model.Settings.DomainName</dd>
+            <dt>Sign-in suffix</dt><dd>@Model.Settings.LoginSuffix</dd>
+            <dt>Search base</dt><dd>@Model.Settings.BaseDn</dd>
+            <dt>Transport</dt><dd>LDAPS only · trusted certificate required</dd>
+        </dl>
+    </section>
+    <section class="card card-body form-stack">
+        <h2>Test a staff sign-in</h2>
+        <p class="muted">This checks the username and password against AD without switching your current account or assigning permissions.</p>
+        @if (!Model.CanTest) { <p class="validation" role="alert">Set the ActiveDirectory connection in server configuration and use an HTTPS URL before entering credentials.</p> }
+        @if (Model.Result is not null) { <p class="notice" role="status">@Model.Result</p> }
+        <form method="post" class="form-stack">
+            @if (!ViewData.ModelState.IsValid) { <div asp-validation-summary="All" class="validation" role="alert"></div> }
+            <label class="field"><span>School username</span><input asp-for="Input.Username" autocomplete="username" disabled="@(!Model.CanTest)" /></label>
+            <label class="field"><span>Password</span><input asp-for="Input.Password" autocomplete="current-password" disabled="@(!Model.CanTest)" /></label>
+            <div><button type="submit" class="btn btn-primary" disabled="@(!Model.CanTest)">Test sign-in</button></div>
+        </form>
+        <p class="note">Passwords are not stored. Failed attempts count toward your normal AD lockout policy.</p>
+    </section>
+    <section class="card card-body form-stack">
+        <h2>Enable staff sign-in</h2>
+        <p>Set <code>Authentication:Mode</code> to <code>ActiveDirectory</code> and configure <code>ActiveDirectory:Host</code>, <code>DomainName</code>, and <code>BaseDn</code>. Use <code>UpnSuffix</code> if staff sign-in names use a different suffix, and <code>NetBiosDomain</code> for DOMAIN\username input.</p>
+        <p>For the first AD administrator, set <code>ActiveDirectory:BootstrapAdminUpn</code> to their exact school sign-in name. They must pass a real AD sign-in; everyone else starts pending. Then use Staff access to approve roles and groups.</p>
+        <p>Share the HTTPS staff URL. The setup guide is in <code>docs/active-directory.md</code>. Entra-only tenants should use the existing OpenID Connect method instead of LDAPS.</p>
+    </section>
+</div>

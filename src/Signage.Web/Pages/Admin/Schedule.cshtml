@@ -1,0 +1,107 @@
+@page
+@model Signage.Web.Pages.Admin.ScheduleModel
+@using State = Signage.Web.Pages.Admin.ScheduleModel.ScheduleState
+@{
+    Layout = "_AdminLayout"; ViewData["Title"] = "Schedule";
+    static string Label(State state) => state switch
+    {
+        State.OnScreen => "On screen",
+        State.Scheduled => "Scheduled",
+        State.Standby => "Standby",
+        State.Ended => "Ended",
+        _ => "Unpublished"
+    };
+    static string Tone(State state) => state switch
+    {
+        State.OnScreen => "pill-live",
+        State.Scheduled => "pill-accent",
+        _ => ""
+    };
+    static string Range(Signage.Domain.Publication publication) =>
+        $"{Display.ShortDateTime(publication.StartsUtc)} → {(publication.EndsUtc is { } ends ? Display.ShortDateTime(ends) : "no end date")}";
+}
+<header class="page-head">
+    <h1>Schedule</h1>
+    <div class="page-actions"><a class="btn btn-primary" asp-page="/Publish">@Icons.Get("upload")Publish</a></div>
+</header>
+
+<div class="stack">
+    @foreach (var schedule in Model.Groups)
+    {
+        <section class="card flush">
+            <div class="card-head">
+                <h2>@schedule.Group.Name</h2>
+                @if (schedule.OnScreen is { } onScreen)
+                {
+                    <span class="subtle">Showing <strong>@onScreen.Publication.PresentationVersion.Presentation.Name</strong></span>
+                }
+            </div>
+            @if (schedule.Rows.Count == 0)
+            {
+                <div class="empty"><strong>Nothing scheduled</strong></div>
+            }
+            else
+            {
+                <div class="timeline">
+                    <div class="timeline-grid">
+                        <div class="timeline-head" aria-hidden="true">
+                            <span>Presentation</span>
+                            <div class="days">@foreach (var day in Model.Days) { <span class="@(day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? "is-weekend" : "")"><small>@(day.ToString("ddd")[..2])</small>@day.Day</span> }</div>
+                            <span></span>
+                        </div>
+                        @foreach (var row in schedule.Rows)
+                        {
+                            var publication = row.Publication;
+                            var name = publication.PresentationVersion.Presentation.Name;
+                            <div class="timeline-row @(row.State == State.Standby ? "is-standby" : "")">
+                                <div class="timeline-name">
+                                    <strong>@name</strong>
+                                    <span>@Range(publication)</span>
+                                </div>
+                                <div class="track">
+                                    @if (row.BarStart is double start && row.BarEnd is double end)
+                                    {
+                                        <span class="bar state-@row.State.ToString().ToLowerInvariant() @(row.OpenEnded ? "is-open-ended" : "")" data-bar-start="@start.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-bar-end="@end.ToString(System.Globalization.CultureInfo.InvariantCulture)" title="@name · @Range(publication)"></span>
+                                    }
+                                    <span class="now-line" data-now="@Model.NowPosition.ToString(System.Globalization.CultureInfo.InvariantCulture)" title="Now"></span>
+                                </div>
+                                <div class="timeline-state">
+                                    <span class="pill @Tone(row.State)">@Label(row.State)</span>
+                                    <form method="post" asp-page-handler="Disable">
+                                        <input type="hidden" name="id" value="@publication.Id" />
+                                        <button class="btn btn-ghost btn-sm" type="submit" aria-label="Unpublish @name from @schedule.Group.Name">Unpublish</button>
+                                    </form>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    @if (Model.Past.Count > 0)
+    {
+        <section class="card flush">
+            <div class="card-head"><h2>Ended and unpublished</h2></div>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Presentation</th><th>Screen group</th><th>Starts</th><th>Ends</th><th>State</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in Model.Past)
+                        {
+                            var publication = row.Publication;
+                            <tr>
+                                <td class="cell-title">@publication.PresentationVersion.Presentation.Name <span class="cell-sub">Version @publication.PresentationVersion.VersionNumber</span></td>
+                                <td>@publication.ScreenGroup.Name</td>
+                                <td class="nowrap">@Display.ShortDateTime(publication.StartsUtc)</td>
+                                <td class="nowrap">@(publication.EndsUtc is { } ends ? Display.ShortDateTime(ends) : "No end date")</td>
+                                <td><span class="pill @Tone(row.State)">@Label(row.State)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+</div>

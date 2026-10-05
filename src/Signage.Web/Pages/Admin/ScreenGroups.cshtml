@@ -1,0 +1,97 @@
+@page
+@inject Signage.Web.Services.SlidePosters Posters
+@model Signage.Web.Pages.Admin.ScreenGroupsModel
+@{
+    Layout = "_AdminLayout"; ViewData["Title"] = "Screen groups";
+    var active = Model.Groups.Where(item => !item.Group.IsArchived).ToList();
+    var archived = Model.Groups.Where(item => item.Group.IsArchived).ToList();
+}
+<header class="page-head">
+    <h1>Screen groups</h1>
+</header>
+@if (TempData["Message"] is string message) { <div class="flash" role="status">@Icons.Get("check")@message</div> }
+
+<section class="card card-body">
+    <form method="post" asp-page-handler="Create" class="form-row">
+        <label class="field"><span>New group name</span><input name="name" required maxlength="120" placeholder="Library" /></label>
+        <label class="field"><span>Description</span><input name="description" maxlength="500" placeholder="Library entrance screens" /></label>
+        <div><button class="btn btn-primary" type="submit">@Icons.Get("plus")Create group</button></div>
+    </form>
+</section>
+
+@if (archived.Count > 0)
+{
+    <h2 class="section-title">Active</h2>
+}
+@if (active.Count == 0)
+{
+    <div class="card empty"><strong>No active screen groups</strong></div>
+}
+<div class="group-cards">
+    @foreach (var card in active)
+    {
+        var group = card.Group;
+        var poster = Posters.GetUrl(card.NowPlaying);
+        <article class="card group-card">
+            @if (poster is not null)
+            {
+                <div class="thumb"><img src="@poster" alt="" loading="lazy" /></div>
+            }
+            else
+            {
+                <div class="thumb thumb-empty">@Icons.Get("monitor")</div>
+            }
+            <div class="group-card-body">
+                <h2>@group.Name</h2>
+                @if (!string.IsNullOrWhiteSpace(group.Description)) { <p class="muted">@group.Description</p> }
+                <div class="now-playing">
+                    <span>Now playing</span>
+                    <strong>@(card.NowPlaying?.Presentation.Name ?? "Nothing scheduled")</strong>
+                </div>
+                <div class="device-counts">
+                    @if (card.Online + card.Offline == 0)
+                    {
+                        <span class="pill">No devices</span>
+                    }
+                    else
+                    {
+                        <span class="pill @(card.Online > 0 ? "pill-good" : "")">@card.Online online</span>
+                        if (card.Offline > 0) { <span class="pill pill-warn">@card.Offline offline</span> }
+                    }
+                </div>
+            </div>
+            <div class="group-card-foot">
+                <details>
+                    <summary class="btn btn-ghost btn-sm">@Icons.Get("pencil")Rename</summary>
+                    <form method="post" asp-page-handler="Rename" class="rename-form">
+                        <input type="hidden" name="id" value="@group.Id" />
+                        <input name="name" value="@group.Name" maxlength="120" required aria-label="New name for @group.Name" />
+                        <button class="btn btn-primary btn-sm" type="submit">Save</button>
+                    </form>
+                </details>
+                <form method="post" asp-page-handler="Archive">
+                    <input type="hidden" name="id" value="@group.Id" />
+                    <button class="btn btn-ghost btn-sm" type="submit">@Icons.Get("archive")Archive</button>
+                </form>
+            </div>
+        </article>
+    }
+</div>
+
+@if (archived.Count > 0)
+{
+    <h2 class="section-title">Archived</h2>
+    <div class="card flush">
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Group</th><th>Description</th><th>Devices</th></tr></thead>
+                <tbody>
+                    @foreach (var card in archived)
+                    {
+                        <tr><td class="cell-title">@card.Group.Name</td><td class="muted">@card.Group.Description</td><td>@(card.Online + card.Offline)</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

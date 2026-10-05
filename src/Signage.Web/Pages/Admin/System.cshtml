@@ -1,0 +1,67 @@
+@page
+@model Signage.Web.Pages.Admin.SystemModel
+@{ Layout = "_AdminLayout"; ViewData["Title"] = "System"; }
+<header class="page-head">
+    <h1>System</h1>
+</header>
+
+<section class="health" aria-label="Service health">
+    <div class="card health-card @(Model.DatabaseReady ? "is-good" : "is-bad")">
+        <div class="health-top">
+            <span class="health-icon">@Icons.Get("database")</span>
+            <span class="pill @(Model.DatabaseReady ? "pill-good" : "pill-bad")">@(Model.DatabaseReady ? "Ready" : "Unavailable")</span>
+        </div>
+        <h2>Database</h2>
+        <p>SQLite</p>
+    </div>
+    <div class="card health-card @(Model.StorageWritable ? "is-good" : "is-bad")">
+        <div class="health-top">
+            <span class="health-icon">@Icons.Get("drive")</span>
+            <span class="pill @(Model.StorageWritable ? "pill-good" : "pill-bad")">@(Model.StorageWritable ? "Writable" : "Read only")</span>
+        </div>
+        <h2>Content storage</h2>
+        <p>@Model.AvailableSpace</p>
+    </div>
+    <div class="card health-card @(Model.ConverterReady ? "is-good" : "is-warn")">
+        <div class="health-top">
+            <span class="health-icon">@Icons.Get("cpu")</span>
+            <span class="pill @(Model.ConverterReady ? "pill-good" : "pill-warn")">@(Model.ConverterReady ? "Ready" : "Unavailable")</span>
+        </div>
+        <h2>Converter</h2>
+        <p>@(Model.ConverterReady ? $"{Model.QueuedJobs} queued · {Model.FailedVersions} failed" : "Existing screens keep playing their content")</p>
+    </div>
+</section>
+
+<div class="stack">
+<div class="split">
+    <section class="card flush">
+        <div class="card-head"><h2>Host</h2></div>
+        <dl class="facts">
+            <dt>Machine</dt><dd>@Model.MachineName</dd>
+            <dt>Operating system</dt><dd>@Model.OperatingSystem</dd>
+            <dt>Runtime</dt><dd>@Model.Runtime</dd>
+            <dt>Application version</dt><dd>@Model.AppVersion</dd>
+            <dt>Environment</dt><dd>@Model.EnvironmentName</dd>
+            <dt>Server time</dt><dd>@Model.ServerTime</dd>
+            <dt>Uptime</dt><dd>@Display.Duration((long)Model.Uptime.TotalMilliseconds)</dd>
+            <dt>Memory in use</dt><dd>@Model.MemoryUsage</dd>
+        </dl>
+    </section>
+    <section class="card flush">
+        <div class="card-head"><h2>Conversion queue</h2></div>
+        <dl class="facts">
+            <dt>Queued jobs</dt><dd>@Model.QueuedJobs</dd>
+            <dt>Failed versions</dt><dd>@if (Model.FailedVersions > 0) { <a asp-page="/Admin/Presentations">@Model.FailedVersions</a> } else { <span>0</span> }</dd>
+        </dl>
+    </section>
+</div>
+
+<section class="card flush">
+    <div class="card-head"><h2>Storage locations</h2></div>
+    <dl class="facts">
+        <dt>Database</dt><dd><code>@Model.DatabasePath</code></dd>
+        <dt>Content root</dt><dd><code>@Model.ContentRoot</code></dd>
+        <dt>Temporary root</dt><dd><code>@Model.TempRoot</code></dd>
+    </dl>
+</section>
+</div>

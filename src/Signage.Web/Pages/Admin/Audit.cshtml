@@ -1,0 +1,64 @@
+@page
+@model Signage.Web.Pages.Admin.AuditModel
+@{
+    Layout = "_AdminLayout"; ViewData["Title"] = "Audit log";
+    var today = DateTime.Now.Date;
+    static (string Category, string Icon) Classify(string action) => action switch
+    {
+        "DevicePaired" => ("devices", "link"),
+        _ when action.StartsWith("Device", StringComparison.Ordinal) => ("devices", "monitor"),
+        _ when action.StartsWith("Presentation", StringComparison.Ordinal) || action.StartsWith("Conversion", StringComparison.Ordinal) => ("presentations", "file"),
+        _ when action.StartsWith("Publication", StringComparison.Ordinal) => ("publishing", "send"),
+        _ when action.StartsWith("ScreenGroup", StringComparison.Ordinal) => ("groups", "layers"),
+        _ when action.StartsWith("PublisherAccess", StringComparison.Ordinal) => ("access", "users"),
+        _ => ("other", "list")
+    };
+    string DayLabel(DateTime day) => day == today ? "Today" : day == today.AddDays(-1) ? "Yesterday" : day.ToString("dddd d MMMM yyyy");
+    var days = Model.Events.GroupBy(item => item.OccurredUtc.LocalDateTime.Date);
+}
+<header class="page-head">
+    <h1>Audit log</h1>
+</header>
+@if (Model.Events.Count == 0)
+{
+    <div class="card empty">@Icons.Get("list")<strong>No events recorded yet</strong></div>
+}
+else
+{
+    <div class="toolbar" data-filter-controls="#audit-list" data-filter-empty="#audit-empty">
+        <label class="search">@Icons.Get("search")<span class="visually-hidden">Search the audit log</span><input type="search" placeholder="Search events" data-filter-search /></label>
+        <div class="segmented" role="group" aria-label="Filter by category">
+            <button type="button" data-filter-state="all" aria-pressed="true">All</button>
+            <button type="button" data-filter-state="devices" aria-pressed="false">Devices</button>
+            <button type="button" data-filter-state="presentations" aria-pressed="false">Presentations</button>
+            <button type="button" data-filter-state="publishing" aria-pressed="false">Publishing</button>
+            <button type="button" data-filter-state="groups" aria-pressed="false">Groups</button>
+            <button type="button" data-filter-state="access" aria-pressed="false">Access</button>
+        </div>
+    </div>
+    <div class="card flush">
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Time</th><th>Event</th><th>Summary</th><th>By</th><th>Entity</th></tr></thead>
+                <tbody id="audit-list">
+                    @foreach (var day in days)
+                    {
+                        <tr class="day-row" data-filter-head><th colspan="5" scope="colgroup">@DayLabel(day.Key)</th></tr>
+                        foreach (var item in day)
+                        {
+                            var (category, icon) = Classify(item.Action);
+                            <tr data-filter-item data-state="@category">
+                                <td class="nowrap muted" title="@item.OccurredUtc.LocalDateTime.ToString("dd MMM yyyy HH:mm:ss")">@item.OccurredUtc.LocalDateTime.ToString("HH:mm:ss")</td>
+                                <td><span class="event"><span class="event-icon">@Icons.Get(icon)</span>@Display.Humanize(item.Action)</span></td>
+                                <td>@item.Summary</td>
+                                <td><span class="nowrap">@item.ActorId</span><span class="cell-sub">@item.ActorType</span></td>
+                                <td><code title="@item.EntityType/@item.EntityId">@item.EntityType</code><span class="cell-sub mono">@(item.EntityId.Length > 8 ? item.EntityId[..8] : item.EntityId)</span></td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="filter-empty" id="audit-empty" hidden>No events match.</p>
+    </div>
+}

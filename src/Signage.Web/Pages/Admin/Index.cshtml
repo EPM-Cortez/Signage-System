@@ -1,0 +1,124 @@
+@page
+@using Signage.Domain
+@inject Signage.Web.Services.SlidePosters Posters
+@model Signage.Web.Pages.Admin.IndexModel
+@{ Layout = "_AdminLayout"; ViewData["Title"] = "Overview"; }
+<header class="page-head">
+    <h1>Overview</h1>
+    <div class="page-actions">
+        <a class="btn btn-secondary" asp-page="/Publish">@Icons.Get("upload")Publish</a>
+        <a class="btn btn-primary" asp-page="/Admin/Pairing">@Icons.Get("plus")Pair a device</a>
+    </div>
+</header>
+
+<section class="stats" aria-label="Summary">
+    <div class="stat tone-ink">
+        <span class="stat-label">@Icons.Get("monitor")Online devices</span>
+        <span class="stat-value">@Model.OnlineDevices</span>
+        <span class="stat-note">of @(Model.OnlineDevices + Model.OfflineDevices) paired</span>
+    </div>
+    <div class="stat @(Model.OfflineDevices > 0 ? "tone-warn" : "")">
+        <span class="stat-label">@Icons.Get("alert")Offline devices</span>
+        <span class="stat-value">@Model.OfflineDevices</span>
+    </div>
+    <div class="stat">
+        <span class="stat-label">@Icons.Get("layers")Screen groups</span>
+        <span class="stat-value">@Model.ActiveGroups</span>
+    </div>
+    <div class="stat @(Model.FailedPreparations > 0 ? "tone-bad" : "")">
+        <span class="stat-label">@Icons.Get("file")Failed preparations</span>
+        <span class="stat-value">@Model.FailedPreparations</span>
+    </div>
+</section>
+
+<div class="split">
+    <div class="stack">
+        <section class="card flush">
+            <div class="card-head"><h2>Screen groups</h2><a class="card-link" asp-page="/Admin/ScreenGroups">Manage groups</a></div>
+            @if (Model.Groups.Count == 0)
+            {
+                <div class="empty"><strong>No screen groups</strong><a class="btn btn-secondary btn-sm" asp-page="/Admin/ScreenGroups">Create a group</a></div>
+            }
+            <ul class="rows">
+                @foreach (var group in Model.Groups)
+                {
+                    var poster = Posters.GetUrl(group.NowPlaying);
+                    <li class="row">
+                        @if (poster is not null)
+                        {
+                            <span class="thumb thumb-sm"><img src="@poster" alt="" loading="lazy" /></span>
+                        }
+                        else
+                        {
+                            <span class="thumb thumb-sm thumb-empty">@Icons.Get("monitor")</span>
+                        }
+                        <div class="row-main">
+                            <span class="row-title"><a asp-page="/Admin/Schedule">@group.Name</a></span>
+                            <span class="row-meta">@(group.NowPlaying?.Presentation.Name ?? "Nothing playing")</span>
+                        </div>
+                        <div class="device-counts">
+                            @if (group.Online + group.Offline == 0)
+                            {
+                                <span class="pill">No devices</span>
+                            }
+                            else
+                            {
+                                <span class="pill @(group.Online > 0 ? "pill-good" : "")">@group.Online online</span>
+                                if (group.HasOffline)
+                                {
+                                    <span class="pill pill-warn">@group.Offline offline</span>
+                                }
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        </section>
+
+        <section class="card flush">
+            <div class="card-head"><h2>Recent uploads</h2><a class="card-link" asp-page="/Admin/Presentations">All presentations</a></div>
+            @if (Model.RecentVersions.Count == 0)
+            {
+                <div class="empty"><strong>Nothing uploaded yet</strong></div>
+            }
+            <ul class="rows">
+                @foreach (var version in Model.RecentVersions)
+                {
+                    <li class="row">
+                        <span class="row-icon">@Icons.Get("file")</span>
+                        <div class="row-main">
+                            <span class="row-title">@version.Presentation.Name</span>
+                            <span class="row-meta">Version @version.VersionNumber · @Display.Ago(version.CreatedUtc, Model.Now)</span>
+                        </div>
+                        <span class="pill pill-@Display.StatusTone(version.Status)">@Display.StatusLabel(version.Status)</span>
+                    </li>
+                }
+            </ul>
+        </section>
+    </div>
+
+    <section class="card flush">
+        <div class="card-head"><h2>Needs attention</h2></div>
+        @if (Model.Attention.Count == 0)
+        {
+            <div class="empty">
+                <span class="row-icon tone-good">@Icons.Get("check")</span>
+                <strong>Nothing needs attention</strong>
+            </div>
+        }
+        <ul class="rows">
+            @foreach (var item in Model.Attention)
+            {
+                var offline = item.Kind == Signage.Web.Pages.Admin.IndexModel.AttentionKind.OfflineDevice;
+                <li class="row">
+                    <span class="row-icon @(offline ? "tone-warn" : "tone-bad")">@Icons.Get(offline ? "monitor" : "file")</span>
+                    <div class="row-main">
+                        <span class="row-title">@item.Title</span>
+                        <span class="row-meta">@item.Detail</span>
+                    </div>
+                    <a class="card-link nowrap" href="@item.Url">@item.Action</a>
+                </li>
+            }
+        </ul>
+    </section>
+</div>

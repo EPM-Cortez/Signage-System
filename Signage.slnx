@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Signage.Application/Signage.Application.csproj" />
+    <Project Path="src/Signage.Domain/Signage.Domain.csproj" />
+    <Project Path="src/Signage.Infrastructure/Signage.Infrastructure.csproj" />
+    <Project Path="src/Signage.Web/Signage.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Signage.IntegrationTests/Signage.IntegrationTests.csproj" />
+    <Project Path="tests/Signage.UnitTests/Signage.UnitTests.csproj" />
+  </Folder>
+</Solution>

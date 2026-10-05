@@ -1,0 +1,61 @@
+@page
+@model Signage.Web.Pages.Admin.PairingModel
+@{
+    Layout = "_AdminLayout"; ViewData["Title"] = "Pair a device";
+    var playerUrl = $"{Request.Scheme}://{Request.Host}/player/";
+}
+<header class="page-head">
+    <h1>Pair a device</h1>
+</header>
+@if (Model.Message is not null)
+{
+    <div class="flash @(Model.IsError ? "flash-error" : "")" role="status">@Icons.Get(Model.IsError ? "alert" : "check")@Model.Message</div>
+}
+<div class="pair">
+    <section class="card card-body">
+        <form method="post" class="form-stack">
+            <div asp-validation-summary="ModelOnly" class="validation"></div>
+            <label class="field">
+                <span>Pairing code</span>
+                <input asp-for="Input.Code" class="code-input" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="000000" />
+                <span asp-validation-for="Input.Code" class="validation"></span>
+            </label>
+            <label class="field">
+                <span>Device name</span>
+                <input asp-for="Input.DeviceName" maxlength="160" placeholder="Library display" />
+                <span asp-validation-for="Input.DeviceName" class="validation"></span>
+            </label>
+            <label class="field">
+                <span>Screen group</span>
+                <select asp-for="Input.ScreenGroupId"><option value="">Select a group</option>@foreach (var group in Model.Groups) { <option value="@group.Id">@group.Name</option> }</select>
+                <span asp-validation-for="Input.ScreenGroupId" class="validation"></span>
+            </label>
+            <button class="btn btn-primary btn-lg" type="submit">Approve device</button>
+        </form>
+    </section>
+    <section class="card card-body">
+        <h2 class="step-head">How pairing works</h2>
+        <ol class="steps">
+            <li>
+                <div>
+                    <strong>Open the player on the display</strong>
+                    <p>Use Chromium or Microsoft Edge, ideally in kiosk mode.</p>
+                    <div class="copy-box"><code>@playerUrl</code><button class="btn btn-ghost btn-sm" type="button" data-copy="@playerUrl">Copy</button></div>
+                </div>
+            </li>
+            <li>
+                <div>
+                    <strong>Read the code from the screen</strong>
+                    <p>A six-digit code appears while the display waits to be approved.</p>
+                </div>
+            </li>
+            <li>
+                <div>
+                    <strong>Approve it here</strong>
+                    <p>Name the display and choose its group. It starts downloading that group's content straight away.</p>
+                </div>
+            </li>
+        </ol>
+        <p class="fine-print">Codes expire after 15 minutes and can be used only once. The long-lived device token is shown to the player once and only its hash is stored.</p>
+    </section>
+</div>

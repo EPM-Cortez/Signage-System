@@ -1,0 +1,82 @@
+@page
+@model PublishModel
+@{
+    ViewData["Title"] = "Publish to screens";
+}
+<header class="page-head">
+    <h1>Publish to screens</h1>
+</header>
+<form method="post" enctype="multipart/form-data" class="publish" data-publish-form>
+    <div class="publish-steps">
+        @if (!ViewData.ModelState.IsValid) { <div asp-validation-summary="All" class="validation" role="alert"></div> }
+
+        <section class="card card-body">
+            <div class="step-head"><span class="step-num">1</span><h2 id="screens-heading">Screen groups</h2></div>
+            <fieldset id="screen-groups" aria-labelledby="screens-heading">
+                @if (Model.Groups.Count == 0)
+                {
+                    <p class="muted">You don't have access to any screen groups yet. Ask an administrator to add you.</p>
+                }
+                <div class="group-grid">
+                    @foreach (var group in Model.Groups)
+                    {
+                        var isChecked = HttpMethods.IsPost(Request.Method)
+                            ? Model.Input.ScreenGroupIds.Contains(group.Id)
+                            : Model.Groups.Count == 1 || group.Id == Signage.Web.Services.DevelopmentSeeder.ReceptionId;
+                        <label class="group-tile">
+                            <input type="checkbox" name="Input.ScreenGroupIds" value="@group.Id" data-group-name="@group.Name" checked="@isChecked" />
+                            <span>
+                                <strong>@group.Name</strong>
+                                @if (!string.IsNullOrWhiteSpace(group.Description))
+                                {
+                                    <small>@group.Description</small>
+                                }
+                            </span>
+                        </label>
+                    }
+                </div>
+            </fieldset>
+        </section>
+
+        <section class="card card-body">
+            <div class="step-head"><span class="step-num">2</span><h2>PowerPoint file</h2></div>
+            <label class="drop-zone" data-drop-zone>
+                <span class="drop-icon">@Icons.Get("upload")</span>
+                <strong data-file-label>Drop a PowerPoint here</strong>
+                <span class="hint" data-file-hint>or <span class="browse">browse</span> for a .pptx file</span>
+                <input asp-for="Input.File" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" data-file-input />
+            </label>
+            <span asp-validation-for="Input.File" class="validation"></span>
+        </section>
+
+        <section class="card card-body">
+            <div class="step-head"><span class="step-num">3</span><h2>Details</h2></div>
+            <div class="form-stack">
+                <label class="field">
+                    <span>Presentation name</span>
+                    <input asp-for="Input.Name" maxlength="200" placeholder="Uses the PowerPoint file name" />
+                </label>
+                <label class="check"><input asp-for="Input.PublishWhenReady" /> <span>Publish when ready</span></label>
+                <details class="disclosure" data-schedule>
+                    <summary>@Icons.Get("chevron-right")Schedule for later</summary>
+                    <div class="form-row">
+                        <label class="field"><span>Starts</span><input asp-for="Input.StartsLocal" type="datetime-local" /></label>
+                        <label class="field"><span>Ends</span><input asp-for="Input.EndsLocal" type="datetime-local" /></label>
+                    </div>
+                </details>
+            </div>
+        </section>
+    </div>
+
+    <aside class="card card-body summary" aria-live="polite">
+        <h2>Summary</h2>
+        <dl class="summary-list">
+            <div><dt>Screen groups</dt><dd data-target-list>None selected</dd></div>
+            <div><dt>File</dt><dd data-summary-file class="is-empty">No file chosen</dd></div>
+            <div><dt>Timing</dt><dd data-summary-timing>As soon as it's ready</dd></div>
+        </dl>
+        <button class="btn btn-primary btn-lg btn-block" type="submit" data-submit>Publish</button>
+        <p class="note">@Icons.Get("info")<span>Screens keep playing their current content until the new presentation is ready.</span></p>
+    </aside>
+</form>
+@section Scripts { <script src="~/js/publish.js" asp-append-version="true" defer></script> }

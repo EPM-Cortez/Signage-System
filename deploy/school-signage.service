@@ -1,0 +1,25 @@
+[Unit]
+Description=School Signage Publisher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=signage
+Group=signage
+WorkingDirectory=/opt/school-signage/current/app
+ExecStart=/usr/bin/dotnet /opt/school-signage/current/app/Signage.Web.dll --urls http://127.0.0.1:5080
+Environment=ASPNETCORE_ENVIRONMENT=Production
+EnvironmentFile=-/etc/school-signage/environment
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=330
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/school-signage/current/data /opt/school-signage/current/backups
+
+[Install]
+WantedBy=multi-user.target

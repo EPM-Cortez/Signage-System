@@ -1,0 +1,58 @@
+@page
+@using Signage.Domain
+@model Signage.Web.Pages.Admin.AccessModel
+@{ Layout = "_AdminLayout"; ViewData["Title"] = "Staff access"; }
+<header class="page-head"><h1>Staff access</h1><a class="btn btn-secondary" asp-page="/Admin/Directory">Test Active Directory</a></header>
+@if (!ViewData.ModelState.IsValid) { <div asp-validation-summary="All" class="validation" role="alert"></div> }
+@if (Model.Message is not null) { <p class="notice" role="status">@Model.Message</p> }
+<section class="card card-body form-stack">
+    <h2>Add directory staff</h2>
+    <p class="muted">Administrators manage the system and can publish to all groups. Teachers can upload only to the groups you select. Pending accounts cannot upload. Disable an account to block access.</p>
+    @if (!Model.DirectoryConfigured)
+    {
+        <p class="note"><span>Active Directory is not configured yet. You can test roles with the local demo accounts below. <a asp-page="/Admin/Directory">View connection setup</a>.</span></p>
+    }
+    else
+    {
+        <form method="post" asp-page-handler="Add" class="form-stack">
+            <div class="form-row">
+                <label class="field"><span>School username</span><input asp-for="Input.Username" required autocomplete="off" placeholder="username or username@school.edu" /></label>
+                <label class="field"><span>Role</span><select asp-for="Input.Role"><option value="Teacher">Teacher</option><option value="Administrator">Administrator</option><option value="Pending">Pending approval</option></select></label>
+                <label class="check"><input asp-for="Input.IsEnabled" /><span>Account enabled</span></label>
+            </div>
+            <fieldset class="staff-groups"><legend>Teacher screen groups</legend>
+                @foreach (var group in Model.Groups) { <label class="check"><input type="checkbox" name="Input.ScreenGroupIds" value="@group.Id" /><span>@group.Name</span></label> }
+            </fieldset>
+            <div><button class="btn btn-primary" type="submit">@Icons.Get("plus")Add staff member</button></div>
+        </form>
+    }
+</section>
+<h2 class="section-title">Staff accounts</h2>
+<div class="toolbar" data-filter-controls="#staff-list" data-filter-empty="#staff-empty">
+    <label class="search">@Icons.Get("search")<span class="visually-hidden">Search staff</span><input type="search" placeholder="Search staff" data-filter-search /></label>
+</div>
+<div class="stack" id="staff-list">
+@foreach (var person in Model.People)
+{
+    var grants = Model.Access.Where(item => item.IdentitySubject == person.IdentitySubject).Select(item => item.ScreenGroupId).ToHashSet();
+    <section class="card staff-card" data-filter-item>
+        <div class="card-head"><div><h2>@person.DisplayName</h2><p class="muted">@person.LoginName · @person.Provider</p></div><span class="pill @(person.IsEnabled ? person.Role == StaffRole.Pending ? "pill-warn" : "pill-good" : "pill-bad")">@(person.IsEnabled ? person.Role == StaffRole.Pending ? "Awaiting approval" : person.Role.ToString() : "Disabled")</span></div>
+        <div class="card-body">
+            <form method="post" asp-page-handler="Save" class="form-stack" aria-label="Permissions for @person.LoginName">
+                <input type="hidden" name="id" value="@person.Id" />
+                <div class="form-row">
+                    <label class="field"><span>Role for @person.LoginName</span><select name="Input.Role">
+                        @foreach (var role in Enum.GetValues<StaffRole>()) { <option value="@role" selected="@(role == person.Role)">@(role == StaffRole.Pending ? "Pending approval" : role.ToString())</option> }
+                    </select></label>
+                    <label class="check"><input type="checkbox" name="Input.IsEnabled" value="true" checked="@person.IsEnabled" /><input type="hidden" name="Input.IsEnabled" value="false" /><span>Account enabled</span></label>
+                </div>
+                <fieldset class="staff-groups"><legend>Teacher screen groups (administrators have all groups)</legend>
+                    @foreach (var group in Model.Groups) { <label class="check"><input type="checkbox" name="Input.ScreenGroupIds" value="@group.Id" checked="@grants.Contains(group.Id)" /><span>@group.Name</span></label> }
+                </fieldset>
+                <div class="staff-save"><span class="muted">@(person.LastSignInUtc.HasValue ? "Last sign-in: " + person.LastSignInUtc.Value.ToLocalTime().ToString("d MMM yyyy HH:mm") : "Not signed in yet")</span><button class="btn btn-primary" type="submit">Save permissions</button></div>
+            </form>
+        </div>
+    </section>
+}
+</div>
+<p class="filter-empty" id="staff-empty" hidden>No staff match.</p>

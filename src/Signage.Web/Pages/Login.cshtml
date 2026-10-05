@@ -1,0 +1,35 @@
+@page
+@model Signage.Web.Pages.LoginModel
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Staff sign in · School Signage</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="signin">
+<main class="signin-card">
+    <div class="signin-head"><span class="brand"><span class="brand-mark">@Icons.Get("monitor")</span><span>School Signage</span></span></div>
+    <h1>Staff sign in</h1>
+    @if (Model.Mode.Equals("Development", StringComparison.OrdinalIgnoreCase))
+    {
+        <p class="muted">Local demonstration only. These accounts do not check Active Directory.</p>
+        <a class="btn btn-primary" href="/dev-login">Choose a demo account</a>
+    }
+    else
+    {
+        <p class="muted">Use your school Active Directory username and password.</p>
+        @if (!Request.IsHttps) { <p class="validation" role="alert">Open the HTTPS staff URL before entering your password.</p> }
+        <form method="post" class="form-stack">
+            <input type="hidden" asp-for="ReturnUrl" />
+            @if (!ViewData.ModelState.IsValid) { <div asp-validation-summary="All" class="validation" role="alert"></div> }
+            <label class="field"><span>School username</span><input asp-for="Input.Username" autocomplete="username" placeholder="username or username@school.edu" disabled="@(!Model.CanSubmit)" /><span asp-validation-for="Input.Username" class="validation"></span></label>
+            <label class="field"><span>Password</span><input asp-for="Input.Password" autocomplete="current-password" disabled="@(!Model.CanSubmit)" /></label>
+            <button class="btn btn-primary btn-block" type="submit" disabled="@(!Model.CanSubmit)">Sign in</button>
+        </form>
+        <p class="note">Your password is checked by Active Directory and is not saved by this app. Screen access is assigned by your signage administrator.</p>
+    }
+</main>
+</body>
+</html>

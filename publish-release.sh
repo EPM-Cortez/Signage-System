@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$repo_root"
+release_root="$repo_root/artifacts/school-signage"
+rm -rf -- "$release_root"
+"$repo_root/setup-local.sh"
+dotnet_bin="$repo_root/.dotnet/dotnet"; [[ -x "$dotnet_bin" ]] || dotnet_bin="$(command -v dotnet)"
+mkdir -p "$release_root/app" "$release_root/converter" "$release_root/data/content" "$release_root/data/temp" "$release_root/backups"
+"$dotnet_bin" publish src/Signage.Web/Signage.Web.csproj -c Release --no-restore -o "$release_root/app"
+rm -f -- "$release_root/app/appsettings.Development.json"
+cp -a src/Signage.Converter/dist "$release_root/converter/dist"
+cp -a src/Signage.Converter/scripts "$release_root/converter/scripts"
+cp src/Signage.Converter/package.json src/Signage.Converter/package-lock.json "$release_root/converter/"
+(cd "$release_root/converter" && npm ci --omit=dev)
+cp -a fonts docs deploy scripts "$release_root/"
+cp README.md THIRD_PARTY_NOTICES.md "$release_root/"
+cp deploy/appsettings.Production.sample.json "$release_root/app/appsettings.Production.sample.json"
+tar -C "$(dirname "$release_root")" -czf "$release_root.tar.gz" "$(basename "$release_root")"
+echo "Release created at $release_root and $release_root.tar.gz"

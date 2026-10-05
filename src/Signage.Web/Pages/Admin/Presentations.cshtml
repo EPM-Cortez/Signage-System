@@ -1,0 +1,177 @@
+@page
+@using Signage.Domain
+@inject Signage.Web.Services.SlidePosters Posters
+@model Signage.Web.Pages.Admin.PresentationsModel
+@{
+    Layout = "_AdminLayout"; ViewData["Title"] = "Presentations";
+    var entries = Model.Presentations;
+    int Count(string state) => entries.Count(entry => entry.Versions.Any(version => Display.StatusFilter(version.Status) == state));
+}
+<header class="page-head">
+    <h1>Presentations</h1>
+    <div class="page-actions"><a class="btn btn-primary" asp-page="/Publish">@Icons.Get("upload")Upload</a></div>
+</header>
+@if (TempData["Message"] is string message) { <div class="flash" role="status">@Icons.Get("check")@message</div> }
+
+@if (entries.Count == 0)
+{
+    <div class="card empty">
+        @Icons.Get("slides")
+        <strong>No presentations have been uploaded</strong>
+        <a class="btn btn-primary" asp-page="/Publish">Upload a presentation</a>
+    </div>
+}
+else
+{
+    <div class="toolbar" data-filter-controls="#presentation-list" data-filter-empty="#presentation-empty">
+        <label class="search">@Icons.Get("search")<span class="visually-hidden">Search presentations</span><input type="search" placeholder="Search presentations" data-filter-search /></label>
+        <div class="segmented" role="group" aria-label="Filter by status">
+            <button type="button" data-filter-state="all" aria-pressed="true">All <span class="count">@entries.Count</span></button>
+            <button type="button" data-filter-state="ready" aria-pressed="false">Ready <span class="count">@Count("ready")</span></button>
+            <button type="button" data-filter-state="preparing" aria-pressed="false">Preparing <span class="count">@Count("preparing")</span></button>
+            <button type="button" data-filter-state="failed" aria-pressed="false">Failed <span class="count">@Count("failed")</span></button>
+        </div>
+    </div>
+
+    <div class="pres-list" id="presentation-list">
+    @foreach (var entry in entries)
+    {
+        var presentation = entry.Presentation;
+        var latest = entry.Latest;
+        var poster = Posters.GetUrl(entry.Showcase);
+        var onScreen = entry.Versions.SelectMany(version => Model.OnScreen[version.Id]).Distinct().ToList();
+        var states = string.Join(' ', entry.Versions.Select(version => Display.StatusFilter(version.Status)).Distinct());
+        <article class="card flush" data-filter-item data-state="@states">
+            <div class="pres-head">
+                @if (poster is not null)
+                {
+                    <a class="thumb thumb-md" asp-page="/Preview" asp-route-versionId="@entry.Showcase!.Id" aria-label="Preview @presentation.Name"><img src="@poster" alt="" loading="lazy" /></a>
+                }
+                else
+                {
+                    <span class="thumb thumb-md thumb-empty @(latest.Status == PresentationVersionStatus.Failed ? "is-failed" : "is-busy")">@Icons.Get(latest.Status == PresentationVersionStatus.Failed ? "alert" : "slides")</span>
+                }
+                <div class="pres-title">
+                    <h2>@presentation.Name</h2>
+                    <div class="meta">
+                        <span>@Icons.Get("file")@latest.OriginalFileName</span>
+                        <span>@Icons.Get("user")@presentation.CreatedBySubject</span>
+                        <span title="@Display.DateTime(latest.CreatedUtc)">@Icons.Get("clock")Updated @Display.Ago(latest.CreatedUtc, Model.Now)</span>
+                    </div>
+                    @if (onScreen.Count > 0)
+                    {
+                        <div class="on-screen">
+                            <span class="pill pill-live">On screen</span>
+                            @foreach (var group in onScreen) { <span class="chip chip-static">@group</span> }
+                        </div>
+                    }
+                </div>
+                <span class="pill pill-@Display.StatusTone(latest.Status)">@Display.StatusLabel(latest.Status)</span>
+            </div>
+
+            <div class="versions">
+            @foreach (var version in entry.Versions)
+            {
+                var diagnostics = Signage.Web.Pages.Admin.PresentationsModel.ParseDiagnostics(version.DiagnosticsJson);
+                var failed = version.Status == PresentationVersionStatus.Failed;
+                var ready = version.Status == PresentationVersionStatus.Ready;
+                <div class="version">
+                    <div class="version-row">
+                        <span class="version-label">Version @version.VersionNumber @if (version.Id == presentation.CurrentVersionId) { <span class="tag tag-solid">Current</span> }</span>
+                        <span><span class="pill pill-@Display.StatusTone(version.Status)">@Display.StatusLabel(version.Status)</span></span>
+                        <span>
+                            @if (version.SlideCount > 0)
+                            {
+                                <text>@version.SlideCount @(version.SlideCount == 1 ? "slide" : "slides")</text>
+                                if (version.TotalDurationMs > 0) { <span class="cell-sub">@Display.Duration(version.TotalDurationMs) loop</span> }
+                            }
+                            else
+                            {
+                                <span class="muted">No slides yet</span>
+                            }
+                        </span>
+                        <span class="muted">@(version.ReadyUtc is DateTimeOffset preparedUtc ? $"Prepared {Display.DateTime(preparedUtc)}" : $"Uploaded {Display.DateTime(version.CreatedUtc)}")</span>
+                        <div class="version-actions">
+                            @if (failed)
+                            {
+                                <form method="post" asp-page-handler="Retry"><input type="hidden" name="versionId" value="@version.Id" /><button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("refresh")Retry</button></form>
+                            }
+                            @if (ready)
+                            {
+                                <a class="btn btn-secondary btn-sm" asp-page="/Preview" asp-route-versionId="@version.Id">@Icons.Get("eye")Preview</a>
+                                if (Model.Groups.Count > 0)
+                                {
+                                    <form method="post" asp-page-handler="Rollback" class="inline-form">
+                                        <input type="hidden" name="versionId" value="@version.Id" />
+                                        <select name="screenGroupId" aria-label="Screen group for version @version.VersionNumber of @presentation.Name">@foreach (var group in Model.Groups) { <option value="@group.Id">@group.Name</option> }</select>
+                                        <button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("send")Publish</button>
+                                    </form>
+                                }
+                            }
+                        </div>
+                    </div>
+                    @if (failed || diagnostics is not null)
+                    {
+                        var summary = failed ? "Failure details" : "Diagnostics";
+                        if (diagnostics?.Warnings.Count > 0) summary += $" · {diagnostics.Warnings.Count} {(diagnostics.Warnings.Count == 1 ? "warning" : "warnings")}";
+                        if (diagnostics?.ElapsedMs is long elapsed) summary += $" · rendered in {Display.Duration(elapsed)}";
+                        <details class="disclosure diag">
+                            <summary>@Icons.Get("chevron-right")@summary</summary>
+                            <div class="diag-body">
+                                @if (failed)
+                                {
+                                    <div>
+                                        <h3>Failure</h3>
+                                        <p class="failure-code">@(version.FailureCode ?? "Unknown")</p>
+                                        @if (!string.IsNullOrWhiteSpace(version.FailureDetail)) { <pre class="log">@version.FailureDetail</pre> }
+                                    </div>
+                                }
+                                @if (diagnostics is not null && diagnostics.Raw is null)
+                                {
+                                    <dl class="kv">
+                                        <div><dt>Renderer</dt><dd>@(diagnostics.Renderer ?? "Unknown")</dd></div>
+                                        <div><dt>Render time</dt><dd>@(diagnostics.ElapsedMs is long ms ? Display.Duration(ms) : "Unknown")</dd></div>
+                                        <div><dt>Exit code</dt><dd>@(diagnostics.ExitCode?.ToString() ?? "Unknown")</dd></div>
+                                        <div><dt>Source hash</dt><dd><code title="@version.SourceSha256">@version.SourceSha256[..Math.Min(12, version.SourceSha256.Length)]</code></dd></div>
+                                    </dl>
+                                    <div>
+                                        <h3>Warnings</h3>
+                                        @if (diagnostics.Warnings.Count == 0)
+                                        {
+                                            <p class="muted">None</p>
+                                        }
+                                        else
+                                        {
+                                            <ul class="warning-list">@foreach (var warning in diagnostics.Warnings) { <li>@warning</li> }</ul>
+                                        }
+                                    </div>
+                                    @if (diagnostics.Fonts.Count > 0)
+                                    {
+                                        <div>
+                                            <h3>Fonts</h3>
+                                            <div class="chips">@foreach (var font in diagnostics.Fonts) { <span class="chip chip-static">@font</span> }</div>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(diagnostics.Output))
+                                    {
+                                        <details class="disclosure">
+                                            <summary>@Icons.Get("chevron-right")Converter output</summary>
+                                            <pre class="log">@diagnostics.Output</pre>
+                                        </details>
+                                    }
+                                }
+                                else if (diagnostics?.Raw is not null)
+                                {
+                                    <pre class="log">@diagnostics.Raw</pre>
+                                }
+                            </div>
+                        </details>
+                    }
+                </div>
+            }
+            </div>
+        </article>
+    }
+    </div>
+    <p class="card filter-empty" id="presentation-empty" hidden>No presentations match.</p>
+}

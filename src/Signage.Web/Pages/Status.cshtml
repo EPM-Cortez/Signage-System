@@ -1,0 +1,18 @@
+@page "{versionId:guid}"
+@model StatusModel
+@{ ViewData["Title"] = "Preparing presentation"; }
+<section class="card status-card" data-status-url="/api/presentation-versions/@Model.VersionId/status">
+    <div class="status-mark" aria-hidden="true">
+        <span class="spinner"></span>
+        @Icons.Get("check", "icon-ready")
+        @Icons.Get("alert", "icon-failed")
+    </div>
+    <h1 data-status-heading>Preparing for screens</h1>
+    <p data-status-message>You can close this page. Preparation continues on the server.</p>
+    <div class="progress" role="progressbar" aria-label="Preparation in progress"><span></span></div>
+    <div class="status-actions">
+        <a class="btn btn-primary hidden" data-preview-link href="#">@Icons.Get("eye")Open preview</a>
+        <a class="btn btn-secondary" asp-page="/Publish">Upload another</a>
+    </div>
+</section>
+@section Scripts { <script src="~/js/status.js" asp-append-version="true" defer></script> }
