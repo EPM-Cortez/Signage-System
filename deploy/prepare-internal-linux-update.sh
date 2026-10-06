@@ -50,7 +50,7 @@ export AllowedHosts='localhost;127.0.0.1' Logging__LogLevel__Default=Warning
 [[ -z $(ss -ltnH 'sport = :5198') ]] || { echo 'Smoke-test port is in use.' >&2; exit 1; }
 # Build a disposable database with the currently installed schema, then upgrade it.
 if [[ -f /opt/school-signage/current/app/Signage.Web.dll ]]; then
-    /usr/bin/dotnet /opt/school-signage/current/app/Signage.Web.dll --migrate --contentRoot /opt/school-signage/current/app
+    /usr/bin/dotnet /opt/school-signage/current/app/Signage.Web.dll --migrate --contentRoot "$stage/package/app"
 fi
 /usr/bin/dotnet package/app/Signage.Web.dll --migrate --contentRoot "$stage/package/app"
 python3 - "$stage/smoke/signage.db" <<'PY'
