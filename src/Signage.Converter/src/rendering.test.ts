@@ -5,7 +5,9 @@ import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { PNG } from 'pngjs';
-import { convertPptxToSvg } from 'pptx-glimpse';
+import { convertPptxToPng, convertPptxToSvg } from 'pptx-glimpse';
+import { encode } from 'jpeg-js';
+import { createCmykImageNormalizer } from './images.js';
 import { PptxGlimpseAdapter, type RenderSettings } from './adapter.js';
 import { loadRenderFonts } from './fonts.js';
 
@@ -18,6 +20,9 @@ const settings: RenderSettings = {
   outputWidth: 960, fontDirectories: [resolve(import.meta.dirname, '../../../fonts')], useSystemFonts: false,
   fontMapping: { Aptos: 'Carlito' }, requestedSourceSlideNumbers: [1], timeoutSeconds: 30, diagnosticVerbosity: 'normal'
 };
+// Original 8x4 red/blue test image encoded as an Adobe CMYK JPEG.
+// This contains no school presentation data or third-party artwork.
+const cmykJpeg = Buffer.from('/9j/7gAOQWRvYmUAZAAAAAAA/9sAQwABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB/8AAFAgABAAIBEMRAE0RAFkRAEsRAP/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/aAA4EQwBNAFkASwAAPwCP/g+c/wCcXX/d7P8A76PX+f8A1H/wYx/85Rf+7Jv/AH7iv7+K/9k=', 'base64');
 const escapeXml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const textBody = (text: string, font: string, size = 4_000) => `<a:p><a:r><a:rPr lang="en-GB" sz="${size}"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="${escapeXml(font)}"/></a:rPr><a:t>${escapeXml(text)}</a:t></a:r><a:endParaRPr lang="en-GB"/></a:p>`;
 const textShape = (font: string) => `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Regression text"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="9144000" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>${textBody('Visible text 123', font)}</p:txBody></p:sp>`;
@@ -36,6 +41,60 @@ function fixture(content: string, chartXml?: string, ratio43 = false): Uint8Arra
   }
   return zipSync(Object.fromEntries(Object.entries(files).map(([path, xml]) => [path, strToU8(xml)])));
 }
+
+function pictureFixture(bytes: Uint8Array): Uint8Array {
+  const picture = `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Colour test"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="6858000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+  const files = unzipSync(fixture(picture));
+  files['[Content_Types].xml'] = strToU8(strFromU8(files['[Content_Types].xml']!).replace('</Types>', '<Default Extension="JPG" ContentType="image/jpeg"/></Types>'));
+  files['ppt/slides/_rels/slide1.xml.rels'] = strToU8(`<Relationships xmlns="${relationship}"><Relationship Id="rIdImage" Type="${officeRelationship}/image" Target="../media/colour.JPG"/></Relationships>`);
+  files['ppt/media/colour.JPG'] = new Uint8Array(bytes);
+  return zipSync(files);
+}
+
+test('CMYK pictures render their colours instead of silently disappearing, without changing the PPTX', async () => {
+  const input = pictureFixture(cmykJpeg);
+  const before = new Uint8Array(input);
+  const result = await new PptxGlimpseAdapter().render(input, settings);
+  const png = PNG.sync.read(Buffer.from(result.slides[0]!.png));
+  const sample = (x: number) => [...png.data.subarray((270 * png.width + x) * 4, (270 * png.width + x) * 4 + 4)];
+  assert.deepEqual(sample(120), [255, 0, 0, 255]);
+  assert.deepEqual(sample(840), [0, 0, 255, 255]);
+  assert.ok(result.diagnostics.some(d => d.code === 'renderer.image.cmykConverted' && d.slideNumber === 1));
+  assert.deepEqual(input, before);
+});
+
+test('ordinary RGB JPEG pictures retain the exact upstream PNG output', async () => {
+  const jpeg = encode({ width: 8, height: 4, data: Buffer.from(Array.from({ length: 32 }, () => [30, 180, 60, 255]).flat()) }, 100).data;
+  const input = pictureFixture(jpeg);
+  const fonts = await loadRenderFonts(settings.fontDirectories, settings.useSystemFonts, settings.fontMapping);
+  const upstream = await convertPptxToPng(input, { slides: [1], width: 960, fonts, fontMapping: settings.fontMapping });
+  const result = await new PptxGlimpseAdapter().render(input, settings);
+  assert.deepEqual(result.slides[0]!.png, upstream.slides[0]!.png);
+  assert.ok(!result.diagnostics.some(d => d.code === 'renderer.image.cmykConverted'));
+});
+
+test('CMYK normalization covers shared pictures, fills and backgrounds without touching other SVG', () => {
+  const uri = `data:image/jpeg;base64,${cmykJpeg.toString('base64')}`;
+  const normalize = createCmykImageNormalizer();
+  const svg = `<svg><image href="${uri}"/><pattern><image href="${uri}"/></pattern></svg>`;
+  const first = normalize(svg);
+  assert.equal(first.convertedImages, 1);
+  assert.equal((first.svg.match(/data:image\/png;base64,/g) ?? []).length, 2);
+  assert.deepEqual(normalize(svg), first, 'Shared images must remain visible on later slides');
+  const ordinary = '<svg><image href="data:image/jpeg;base64,/9j/2Q=="/><image href="data:image/png;base64,AAAA"/></svg>';
+  assert.equal(normalize(ordinary).svg, ordinary);
+});
+
+test('corrupt or oversized CMYK JPEGs fail conversion instead of publishing a blank picture', () => {
+  const frame = cmykJpeg.indexOf(Buffer.from([0xff, 0xc0]));
+  const truncated = cmykJpeg.subarray(0, frame + 22);
+  const oversized = Buffer.from(cmykJpeg);
+  oversized.writeUInt16BE(50_000, frame + 5);
+  oversized.writeUInt16BE(50_000, frame + 7);
+  for (const bytes of [truncated, oversized]) {
+    assert.throws(() => createCmykImageNormalizer()(`<image href="data:image/jpeg;base64,${bytes.toString('base64')}"/>`), /CMYK_IMAGE_CONVERSION_FAILED/);
+  }
+});
 
 const chartFrame = `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="3" name="Regression chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="914400" y="914400"/><a:ext cx="9144000" cy="4572000"/></p:xfrm><a:graphic><a:graphicData uri="${drawing}/chart"><c:chart xmlns:c="${drawing}/chart" r:id="rIdChart"/></a:graphicData></a:graphic></p:graphicFrame>`;
 const chart = (values: number[], type = 'line', cache = 'literal') => {

@@ -28,7 +28,7 @@ public static class MetricsEndpoints
             var successful = await db.ConversionJobs.CountAsync(item => item.Status == ConversionJobStatus.Completed, cancellationToken);
             var failed = await db.ConversionJobs.CountAsync(item => item.Status == ConversionJobStatus.Failed, cancellationToken);
             var published = await db.Publications.CountAsync(item => item.IsEnabled, cancellationToken);
-            var devices = await db.Devices.AsNoTracking().Where(item => item.RevokedUtc == null).Select(item => item.LastSeenUtc).ToListAsync(cancellationToken);
+            var devices = await db.Devices.AsNoTracking().Where(item => item.RevokedUtc == null && item.ArchivedUtc == null).Select(item => item.LastSeenUtc).ToListAsync(cancellationToken);
             var offlineBefore = timeProvider.GetUtcNow().AddSeconds(-signageOptions.Value.OfflineAfterSeconds);
             var online = devices.Count(item => item >= offlineBefore);
             var durations = await db.PresentationVersions.AsNoTracking()

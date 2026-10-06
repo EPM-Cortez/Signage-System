@@ -35,7 +35,9 @@ public static class DependencyInjection
         services.AddScoped<IConverterRunner, NodeConverterRunner>();
         services.AddScoped<PptxVideoExtractor>();
         services.AddScoped<ConversionJobProcessor>();
+        services.AddSingleton<ConversionProgressTracker>();
         services.AddScoped<MaintenanceProcessor>();
+        services.AddScoped<ContentDeletionProcessor>();
         services.AddSingleton<DatabaseInitializer>();
         services.AddHostedService<ConversionWorker>();
         services.AddHostedService<MaintenanceWorker>();

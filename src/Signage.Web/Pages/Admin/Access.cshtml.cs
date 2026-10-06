@@ -20,6 +20,11 @@ public sealed class AccessModel(IDbContextFactory<SignageDbContext> dbFactory, S
     public IReadOnlyList<StaffAccount> People { get; private set; } = [];
     public IReadOnlyList<ScreenGroup> Groups { get; private set; } = [];
     public IReadOnlyList<PublisherAccess> Access { get; private set; } = [];
+    public IReadOnlyList<StaffAccount> Administrators => People.Where(item => item.Role == StaffRole.Administrator).ToList();
+    // Accounts awaiting approval sort first so they stand out.
+    public IReadOnlyList<StaffAccount> StaffMembers => People.Where(item => item.Role != StaffRole.Administrator).OrderBy(item => item.Role != StaffRole.Pending).ToList();
+    /// <summary>The row to show expanded, so a failed save stays in view.</summary>
+    public Guid? OpenId { get; private set; }
     public bool DirectoryConfigured => directory.Value.IsConfigured;
     public Task OnGetAsync(CancellationToken token) => LoadAsync(token);
 
@@ -38,6 +43,7 @@ public sealed class AccessModel(IDbContextFactory<SignageDbContext> dbFactory, S
 
     public async Task<IActionResult> OnPostSaveAsync(Guid id, CancellationToken token)
     {
+        OpenId = id;
         if (!ModelState.IsValid) { await LoadAsync(token); return Page(); }
         try
         {

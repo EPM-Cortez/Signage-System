@@ -36,9 +36,19 @@ Always test restore on a separate host or directory before relying on a backup s
 
 ## Maintenance
 
-The scheduled job removes expired pairing sessions, abandoned `.uploading` files, stale conversion attempt directories, and versions older than the configured retention count. Active/future publications and current presentation versions are protected. Set `Storage:CleanupDryRun` to `true` to log candidates without mutation. `PRAGMA optimize` runs after a live cleanup pass.
+The scheduled job removes expired pairing sessions, abandoned `.uploading` files, stale conversion attempt directories, and versions older than the configured retention count. Active/future publications, current presentation versions, archived presentations, and queued/processing conversions are protected. Set `Storage:CleanupDryRun` to `true` to log candidates without mutation. `PRAGMA optimize` runs after a live cleanup pass.
 
 Run `VACUUM` manually only during a planned service stop after a large deletion and after taking a verified backup. It requires additional free disk space and should not run during publication activity.
+
+## Devices and presentation library
+
+Administrators can use **Devices** and **Presentations** to switch between Active and Archived records. Archive is reversible; Delete requires confirmation and is permanent. Every archive, restore, delete, folder change, and move is recorded in the audit log.
+
+Archiving a device keeps its pairing and history while blocking server access. Restore allows its existing credential to work again unless it was revoked separately. Delete removes the device and its pairing sessions; returning displays must pair again. These actions do not erase content already cached on an offline display.
+
+Archiving a PowerPoint keeps all its versions and files, disables its screen schedules, and prevents pending conversions from publishing it. Restore returns it to the library; publish explicitly to put it back on screens. Delete removes every version, conversion job, and schedule, then deletes unused source/package files. Files shared with another retained presentation are kept. Locked files are queued for retry during scheduled maintenance. A PowerPoint currently being converted must finish before it can be deleted.
+
+Create folders in **Presentations**, select a folder on a presentation and choose **Move**, or use **Unfiled** to remove it from a folder. Folders can be renamed or removed. Removing a folder moves its presentations to Unfiled and keeps their files and schedules.
 
 ## Upgrade and rollback
 

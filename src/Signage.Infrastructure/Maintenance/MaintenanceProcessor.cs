@@ -15,7 +15,8 @@ public sealed class MaintenanceProcessor(
     IOptions<StorageOptions> storageOptions,
     IOptions<RenderingOptions> renderingOptions,
     TimeProvider timeProvider,
-    ILogger<MaintenanceProcessor> logger)
+    ILogger<MaintenanceProcessor> logger,
+    ContentDeletionProcessor contentDeletions)
 {
     private readonly StorageOptions storageSettings = storageOptions.Value;
     private readonly RenderingOptions renderingSettings = renderingOptions.Value;
@@ -35,6 +36,10 @@ public sealed class MaintenanceProcessor(
             .Select(item => item.CurrentVersionId!.Value)
             .ToHashSetAsync(cancellationToken);
         protectedVersionIds.UnionWith(currentVersionIds);
+        // Archiving a whole presentation is reversible and must preserve its files.
+        protectedVersionIds.UnionWith(await db.PresentationVersions
+            .Where(item => item.Presentation.ArchivedUtc != null || item.Jobs.Any(job => job.Status == ConversionJobStatus.Queued || job.Status == ConversionJobStatus.Processing))
+            .Select(item => item.Id).ToListAsync(cancellationToken));
 
         var versions = await db.PresentationVersions
             .Select(item => new VersionRecord(
@@ -87,6 +92,7 @@ public sealed class MaintenanceProcessor(
         }
 
         if (!dryRun) await db.SaveChangesAsync(cancellationToken);
+        if (!dryRun) await contentDeletions.PurgeAsync(cancellationToken);
         var temporaryItems = CleanTemporaryItems(now, dryRun);
         if (!dryRun) await db.Database.ExecuteSqlRawAsync("PRAGMA optimize;", cancellationToken);
         return new MaintenanceResult(dryRun, removedVersions, expiredPairings.Count, temporaryItems);

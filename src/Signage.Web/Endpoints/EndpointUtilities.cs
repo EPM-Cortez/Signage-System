@@ -20,7 +20,8 @@ internal static class EndpointUtilities
     public static async Task<Device?> AuthenticateDeviceAsync(
         HttpContext context,
         IDbContextFactory<SignageDbContext> dbFactory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowArchived = false)
     {
         var token = Bearer(context);
         if (string.IsNullOrWhiteSpace(token))
@@ -30,6 +31,6 @@ internal static class EndpointUtilities
         var hash = TokenUtility.Hash(token);
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         var device = await db.Devices.AsNoTracking().SingleOrDefaultAsync(item => item.TokenHash == hash, cancellationToken);
-        return device is not null && device.RevokedUtc is null && TokenUtility.FixedTimeMatches(token, device.TokenHash!) ? device : null;
+        return device is not null && (allowArchived || device.ArchivedUtc is null) && device.RevokedUtc is null && TokenUtility.FixedTimeMatches(token, device.TokenHash!) ? device : null;
     }
 }

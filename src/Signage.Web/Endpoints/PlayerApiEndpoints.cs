@@ -37,7 +37,9 @@ public static class PlayerApiEndpoints
             TimeProvider timeProvider,
             CancellationToken cancellationToken) =>
         {
-            var device = await EndpointUtilities.AuthenticateDeviceAsync(context, dbFactory, cancellationToken);
+            var device = await EndpointUtilities.AuthenticateDeviceAsync(context, dbFactory, cancellationToken, allowArchived: true);
+            // A temporary archive must not make the player discard its pairing as it does for a revoked token (401).
+            if (device?.ArchivedUtc is not null) return Results.StatusCode(StatusCodes.Status403Forbidden);
             if (device?.ScreenGroupId is null)
             {
                 return Results.Unauthorized();
@@ -46,7 +48,7 @@ public static class PlayerApiEndpoints
             var now = timeProvider.GetUtcNow();
             var publications = await db.Publications.AsNoTracking()
                 .Include(item => item.PresentationVersion)
-                .Where(item => item.ScreenGroupId == device.ScreenGroupId && item.IsEnabled)
+                .Where(item => item.ScreenGroupId == device.ScreenGroupId && item.IsEnabled && item.PresentationVersion.Presentation.ArchivedUtc == null)
                 .ToListAsync(cancellationToken);
             var active = PublicationRules.SelectActive(publications, now);
             var next = publications.Where(item => item.StartsUtc > now).OrderBy(item => item.StartsUtc).FirstOrDefault();

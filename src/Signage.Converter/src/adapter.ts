@@ -1,5 +1,7 @@
-import { convertPptxToPng, type ConversionDiagnostic, type ConvertOptions, type PngConversionReport } from 'pptx-glimpse';
+import { convertPptxToSvg, initResvgWasm, type ConversionDiagnostic, type ConvertOptions, type PngConversionReport } from 'pptx-glimpse';
+import { Resvg } from '@resvg/resvg-wasm';
 import { loadRenderFonts } from './fonts.js';
+import { createCmykImageNormalizer } from './images.js';
 
 export type RenderSettings = {
   outputWidth: number;
@@ -18,17 +20,19 @@ export type AdapterResult = {
   supportCoverage: PngConversionReport['supportCoverage'];
 };
 
+export type SlideRenderedCallback = (rendered: number, total: number) => void;
+
 export interface RendererAdapter {
   readonly name: string;
   readonly version: string;
-  render(input: Uint8Array, settings: RenderSettings): Promise<AdapterResult>;
+  render(input: Uint8Array, settings: RenderSettings, onSlideRendered?: SlideRenderedCallback): Promise<AdapterResult>;
 }
 
 export class PptxGlimpseAdapter implements RendererAdapter {
   readonly name = 'pptx-glimpse';
   readonly version = '3.2.8';
 
-  async render(input: Uint8Array, settings: RenderSettings): Promise<AdapterResult> {
+  async render(input: Uint8Array, settings: RenderSettings, onSlideRendered?: SlideRenderedCallback): Promise<AdapterResult> {
     const fonts = await loadRenderFonts(settings.fontDirectories, settings.useSystemFonts, settings.fontMapping);
     // This extension is implemented by the version-checked compatibility patch.
     const options: ConvertOptions & { fitTextToBox: boolean } = {
@@ -37,10 +41,33 @@ export class PptxGlimpseAdapter implements RendererAdapter {
       fonts,
       fontMapping: settings.fontMapping,
       fitTextToBox: settings.fitTextToBox ?? true,
+      textOutput: 'path',
       logLevel: settings.diagnosticVerbosity === 'debug' ? 'debug' : 'off'
     };
-    const report = await convertPptxToPng(input, options);
-    return report;
+    const report = await convertPptxToSvg(input, options);
+    await initResvgWasm();
+    const normalizeImages = createCmykImageNormalizer();
+    const diagnostics: ConversionDiagnostic[] = [...report.diagnostics];
+    const slides: PngConversionReport['slides'][number][] = [];
+    const fontBuffers = fonts.map(font => font.data instanceof Uint8Array ? font.data : new Uint8Array(font.data));
+    for (const slide of report.slides) {
+      const normalized = normalizeImages(slide.svg);
+      if (normalized.convertedImages > 0) diagnostics.push({
+        source: 'renderer', severity: 'info', code: 'renderer.image.cmykConverted',
+        message: `Converted ${normalized.convertedImages} embedded CMYK/YCCK JPEG image(s) to RGB PNG for display.`,
+        slideNumber: slide.slideNumber
+      });
+      const resvg = new Resvg(normalized.svg, { fitTo: { mode: 'width', value: settings.outputWidth }, font: { fontBuffers } });
+      try {
+        const rendered = resvg.render();
+        try {
+          slides.push({ slideNumber: slide.slideNumber, png: new Uint8Array(rendered.asPng()), width: rendered.width, height: rendered.height });
+        } finally { rendered.free(); }
+      } finally { resvg.free(); }
+      // Rasterising is most of the conversion time, so this is what drives the progress shown to staff.
+      onSlideRendered?.(slides.length, report.slides.length);
+    }
+    return { slides, diagnostics, supportCoverage: report.supportCoverage };
   }
 }
 

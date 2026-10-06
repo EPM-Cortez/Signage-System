@@ -34,7 +34,7 @@ const run = async (): Promise<number> => {
   progress('render-started', { slideCount: settings.requestedSourceSlideNumbers.length });
   const started = performance.now();
   const input = new Uint8Array(await readFile(args.input));
-  const result = await adapter.render(input, settings);
+  const result = await adapter.render(input, settings, (rendered, total) => progress('slide-rasterized', { index: rendered, total }));
   if (result.slides.length !== settings.requestedSourceSlideNumbers.length) throw new Error(`Renderer returned ${result.slides.length} of ${settings.requestedSourceSlideNumbers.length} requested slides`);
 
   for (let index = 0; index < result.slides.length; index++) {

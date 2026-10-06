@@ -11,6 +11,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@ViewData["Title"] · School Signage</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="~/js/prefs.js" asp-append-version="true"></script>
 </head>
 <body class="teacher">
     <header class="topbar">
@@ -27,14 +28,7 @@
                 <a class="nav-link" asp-page="/History" aria-current="@Current("/History", "/Status", "/Preview")">@Icons.Get("slides")<span>My presentations</span></a>
             </nav>
             }
-            <div class="account">
-                <span class="avatar" aria-hidden="true">@Display.Initials(User.Identity?.Name)</span>
-                <span class="account-name">@User.Identity?.Name</span>
-                <form method="post" action="/sign-out">
-                    @Html.AntiForgeryToken()
-                    <button class="icon-button" type="submit" aria-label="Sign out" title="Sign out">@Icons.Get("logout")</button>
-                </form>
-            </div>
+            <partial name="_AccountMenu" />
         }
     </header>
     @if (Authentication.Value.Mode.Equals("Development", StringComparison.OrdinalIgnoreCase))

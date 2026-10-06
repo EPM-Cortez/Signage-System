@@ -7,6 +7,8 @@ namespace Signage.Infrastructure.Persistence;
 public sealed class SignageDbContext(DbContextOptions<SignageDbContext> options) : DbContext(options)
 {
     public DbSet<Presentation> Presentations => Set<Presentation>();
+    public DbSet<PresentationFolder> PresentationFolders => Set<PresentationFolder>();
+    public DbSet<PendingContentDeletion> PendingContentDeletions => Set<PendingContentDeletion>();
     public DbSet<PresentationVersion> PresentationVersions => Set<PresentationVersion>();
     public DbSet<ConversionJob> ConversionJobs => Set<ConversionJob>();
     public DbSet<ScreenGroup> ScreenGroups => Set<ScreenGroup>();
@@ -34,7 +36,16 @@ public sealed class SignageDbContext(DbContextOptions<SignageDbContext> options)
             entity.Property(item => item.Name).HasMaxLength(200);
             entity.Property(item => item.CreatedBySubject).HasMaxLength(300);
             entity.HasMany(item => item.Versions).WithOne(item => item.Presentation).HasForeignKey(item => item.PresentationId);
+            entity.HasOne(item => item.Folder).WithMany().HasForeignKey(item => item.FolderId).OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<PresentationFolder>(entity =>
+        {
+            entity.Property(item => item.Name).HasMaxLength(120);
+            entity.Property(item => item.NormalizedName).HasMaxLength(120);
+            entity.HasIndex(item => item.NormalizedName).IsUnique();
+        });
+        modelBuilder.Entity<PendingContentDeletion>(entity => entity.Property(item => item.StorageKey).HasMaxLength(500));
 
         modelBuilder.Entity<PresentationVersion>(entity =>
         {

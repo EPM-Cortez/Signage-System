@@ -25,8 +25,27 @@ public sealed class Presentation
     public required string CreatedBySubject { get; set; }
     public DateTimeOffset CreatedUtc { get; set; }
     public DateTimeOffset? ArchivedUtc { get; set; }
+    public Guid? FolderId { get; set; }
+    public PresentationFolder? Folder { get; set; }
     public Guid? CurrentVersionId { get; set; }
     public List<PresentationVersion> Versions { get; set; } = [];
+}
+
+public sealed class PresentationFolder
+{
+    public Guid Id { get; set; }
+    public required string Name { get; set; }
+    public required string NormalizedName { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
+}
+
+// Durable file cleanup after a presentation is deleted from the library.
+public sealed class PendingContentDeletion
+{
+    public Guid Id { get; set; }
+    public required string StorageKey { get; set; }
+    public bool IsPackage { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 }
 
 public sealed class PresentationVersion
@@ -115,6 +134,7 @@ public sealed class Device
     public string? TokenHash { get; set; }
     public DateTimeOffset? PairedUtc { get; set; }
     public DateTimeOffset? RevokedUtc { get; set; }
+    public DateTimeOffset? ArchivedUtc { get; set; }
     public DateTimeOffset? LastSeenUtc { get; set; }
     public string? LastIpAddress { get; set; }
     public string? BrowserSummary { get; set; }

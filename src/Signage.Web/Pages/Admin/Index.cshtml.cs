@@ -25,17 +25,17 @@ public sealed class IndexModel(IDbContextFactory<SignageDbContext> dbFactory, IO
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         Now = timeProvider.GetUtcNow();
         var offlineBefore = Now.AddSeconds(-options.Value.OfflineAfterSeconds);
-        var devices = await db.Devices.AsNoTracking().Where(item => item.RevokedUtc == null).ToListAsync(cancellationToken);
+        var devices = await db.Devices.AsNoTracking().Where(item => item.RevokedUtc == null && item.ArchivedUtc == null).ToListAsync(cancellationToken);
         OnlineDevices = devices.Count(item => item.LastSeenUtc >= offlineBefore);
         OfflineDevices = devices.Count - OnlineDevices;
         ActiveGroups = await db.ScreenGroups.CountAsync(item => !item.IsArchived, cancellationToken);
-        FailedPreparations = await db.PresentationVersions.CountAsync(item => item.Status == PresentationVersionStatus.Failed, cancellationToken);
+        FailedPreparations = await db.PresentationVersions.CountAsync(item => item.Status == PresentationVersionStatus.Failed && item.Presentation.ArchivedUtc == null, cancellationToken);
         foreach (var device in devices.Where(item => item.LastSeenUtc < offlineBefore || item.LastSeenUtc is null).Take(5))
         {
             var detail = device.LastSeenUtc is null ? "Never seen online" : $"Offline since {Signage.Web.Ui.Display.DateTime(device.LastSeenUtc.Value)}";
             Attention.Add(new AttentionRow(AttentionKind.OfflineDevice, device.Name, detail, "Open devices", "/Admin/Devices"));
         }
-        var failures = await db.PresentationVersions.AsNoTracking().Where(item => item.Status == PresentationVersionStatus.Failed).OrderByDescending(item => item.CreatedUtc).Take(5).ToListAsync(cancellationToken);
+        var failures = await db.PresentationVersions.AsNoTracking().Where(item => item.Status == PresentationVersionStatus.Failed && item.Presentation.ArchivedUtc == null).OrderByDescending(item => item.CreatedUtc).Take(5).ToListAsync(cancellationToken);
         Attention.AddRange(failures.Select(item => new AttentionRow(AttentionKind.FailedPreparation, item.OriginalFileName, "Could not be prepared", "View diagnostics", "/Admin/Presentations")));
 
         var groups = await db.ScreenGroups.AsNoTracking().Where(item => !item.IsArchived)
@@ -44,12 +44,13 @@ public sealed class IndexModel(IDbContextFactory<SignageDbContext> dbFactory, IO
         foreach (var group in groups)
         {
             var active = PublicationRules.SelectActive(group.Publications, Now);
-            var online = group.Devices.Count(item => item.RevokedUtc == null && item.LastSeenUtc >= offlineBefore);
-            var offline = group.Devices.Count(item => item.RevokedUtc == null) - online;
+            var online = group.Devices.Count(item => item.RevokedUtc == null && item.ArchivedUtc == null && item.LastSeenUtc >= offlineBefore);
+            var offline = group.Devices.Count(item => item.RevokedUtc == null && item.ArchivedUtc == null) - online;
             Groups.Add(new GroupRow(group.Id, group.Name, active?.PresentationVersion, online, offline));
         }
 
         RecentVersions = await db.PresentationVersions.AsNoTracking().Include(item => item.Presentation)
+            .Where(item => item.Presentation.ArchivedUtc == null)
             .OrderByDescending(item => item.CreatedUtc).Take(6).ToListAsync(cancellationToken);
     }
 

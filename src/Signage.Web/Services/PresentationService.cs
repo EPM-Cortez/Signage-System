@@ -138,7 +138,8 @@ public sealed class PresentationService(
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var version = await db.PresentationVersions.SingleAsync(item => item.Id == versionId, cancellationToken);
+        var version = await db.PresentationVersions.Include(item => item.Presentation).SingleAsync(item => item.Id == versionId, cancellationToken);
+        if (version.Presentation.ArchivedUtc is not null) throw new InvalidOperationException("Restore this presentation before retrying conversion.");
         if (version.Status != PresentationVersionStatus.Failed)
         {
             throw new InvalidOperationException("Only failed versions can be retried.");
@@ -163,7 +164,11 @@ public sealed class PresentationService(
     public async Task PublishReadyAsync(Guid versionId, Guid screenGroupId, string actor, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-        var version = await db.PresentationVersions.SingleAsync(item => item.Id == versionId, cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var version = await db.PresentationVersions.Include(item => item.Presentation).SingleAsync(item => item.Id == versionId, cancellationToken);
+        if (version.Presentation.ArchivedUtc is not null) throw new InvalidOperationException("Restore this presentation before publishing it.");
+        if (!await db.ScreenGroups.AnyAsync(item => item.Id == screenGroupId && !item.IsArchived, cancellationToken))
+            throw new InvalidOperationException("The screen group is unavailable.");
         if (version.Status != PresentationVersionStatus.Ready)
         {
             throw new InvalidOperationException("Only ready content can be published.");
@@ -181,6 +186,7 @@ public sealed class PresentationService(
         });
         db.AuditEvents.Add(Audit(actor, "PublicationRolledBack", nameof(PresentationVersion), versionId, "A ready version was published as a rollback."));
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private AuditEvent Audit(string actor, string action, string entityType, Guid entityId, string summary) => new()

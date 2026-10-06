@@ -21,7 +21,7 @@ public sealed class PublishModel(PresentationService presentationService) : Page
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
         await LoadGroupsAsync(cancellationToken);
-        if (!ModelState.IsValid) return Page();
+        if (!ModelState.IsValid) return Invalid();
         try
         {
             await using var stream = Input.File!.OpenReadStream();
@@ -37,16 +37,31 @@ public sealed class PublishModel(PresentationService presentationService) : Page
                 Input.StartsLocal?.ToUniversalTime(),
                 Input.EndsLocal?.ToUniversalTime(),
                 cancellationToken);
-            return RedirectToPage("/Status", new { versionId });
+            return IsScriptedUpload
+                ? new JsonResult(new { redirect = Url.Page("/Status", new { versionId }) })
+                : RedirectToPage("/Status", new { versionId });
         }
         catch (Exception exception) when (exception is ArgumentException or UnauthorizedAccessException or Signage.Application.PresentationRejectedException)
         {
             ModelState.AddModelError(string.Empty, exception is UnauthorizedAccessException
                 ? "You cannot publish to one or more selected screen groups."
                 : exception.Message);
-            return Page();
+            return Invalid();
         }
     }
+
+    // publish.js posts the form with XMLHttpRequest to show upload progress, so it needs errors as data rather than a page.
+    private bool IsScriptedUpload => Request.Headers.XRequestedWith == "XMLHttpRequest";
+
+    private IActionResult Invalid() => IsScriptedUpload
+        ? new JsonResult(new
+        {
+            errors = ModelState.Values
+                .SelectMany(entry => entry.Errors)
+                .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage) ? "Check the details and try again." : error.ErrorMessage)
+                .Distinct()
+        }) { StatusCode = StatusCodes.Status400BadRequest }
+        : Page();
 
     private string Subject => User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     private async Task LoadGroupsAsync(CancellationToken cancellationToken) =>

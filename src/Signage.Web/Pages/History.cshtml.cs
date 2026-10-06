@@ -15,7 +15,7 @@ public sealed class HistoryModel(IDbContextFactory<SignageDbContext> dbFactory) 
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         var subject = User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var query = db.PresentationVersions.AsNoTracking().Include(item => item.Presentation).AsQueryable();
+        var query = db.PresentationVersions.AsNoTracking().Include(item => item.Presentation).Where(item => item.Presentation.ArchivedUtc == null);
         if (!User.IsInRole("SignageAdmin")) query = query.Where(item => item.Presentation.CreatedBySubject == subject);
         Items = await query.OrderByDescending(item => item.CreatedUtc).Take(100).ToListAsync(cancellationToken);
     }

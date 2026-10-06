@@ -19,6 +19,8 @@ Before rollout, compare a representative private corpus against PowerPoint scree
 
 ## Text and chart safeguards
 
+Embedded four-component CMYK/YCCK JPEGs are converted to RGB PNG in the generated SVG before rasterisation. The pinned rasteriser otherwise silently omits these print-format images. RGB/grayscale JPEGs and other image formats retain their original payloads, and the uploaded PPTX is unchanged. Normalised images are cached within each conversion and recorded as `renderer.image.cmykConverted` diagnostics. Decoding is bounded to 40 megapixels and 256 MiB; an unsupported/corrupt CMYK image fails conversion instead of publishing a missing picture. Colour conversion uses the JPEG's Adobe colour-transform metadata, not full ICC profile colour management.
+
 Font bytes are loaded explicitly from approved local directories. System fonts are opt-in through `Rendering:UseSystemFonts`; merely configuring a directory never implicitly switches the font policy. The adapter checks that the pinned renderer can parse at least one font before rendering. An empty, missing or corrupt-only font set is a conversion failure, not a successful blank-text package.
 
 The pinned renderer clamps line-chart maxima to zero, which makes negative-only series disappear and clips mixed-sign series. `src/Signage.Converter/scripts/apply-renderer-patch.mjs` corrects the line chart's axis range and coordinate scaling without changing chart data or labels. It checks the package version and original function checksum, patches the installed ESM/CommonJS bundles during `npm ci` and before builds, and fails on unrecognised upstream code. Release scripts include this installer hook. Revalidate or remove the patch before any renderer upgrade; do not bypass a checksum failure.

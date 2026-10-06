@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Signage.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using Signage.Infrastructure.Persistence;
 namespace Signage.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SignageDbContext))]
-    partial class SignageDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261006144313_LibraryManagement")]
+    partial class LibraryManagement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");

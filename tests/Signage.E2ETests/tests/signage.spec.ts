@@ -50,7 +50,8 @@ test('paired player downloads, reloads offline, then loses server access when re
 
   await admin.goto('/Admin/Devices');
   const row = admin.getByRole('row').filter({ hasText: 'Playwright display' });
-  await row.getByRole('button', { name: 'Revoke' }).click();
+  await row.getByRole('button', { name: 'More actions for Playwright display' }).click();
+  await row.getByRole('button', { name: 'Revoke access', exact: true }).click();
   await expect(admin.getByText('Device revoked.')).toBeVisible();
   await player.reload();
   await expect(player.locator('#pairing-code')).toBeVisible({ timeout: 20_000 });

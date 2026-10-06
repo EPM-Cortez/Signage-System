@@ -1,0 +1,37 @@
+@inject Microsoft.Extensions.Options.IOptions<Signage.Application.AuthenticationOptions> Authentication
+@{
+    // Shared by both layouts: the signed-in person, their theme choice and sign out.
+    var role = User.IsInRole("SignageAdmin") ? "Administrator" : User.IsInRole("Teacher") ? "Teacher" : "Awaiting access";
+}
+<div class="account" data-account>
+    <button class="account-button" type="button" aria-expanded="false" aria-controls="account-menu" data-account-toggle>
+        <span class="avatar" aria-hidden="true">@Display.Initials(User.Identity?.Name)</span>
+        <span class="account-text nav-label">
+            <span class="account-name">@User.Identity?.Name</span>
+            <span class="account-role">@role</span>
+        </span>
+        @Icons.Get("chevrons-up-down", "account-chevron nav-label")
+    </button>
+    <div class="account-menu" id="account-menu">
+        <div class="account-menu-head">
+            <strong>@User.Identity?.Name</strong>
+            <span class="account-role">@role</span>
+            @if (Authentication.Value.Mode.Equals("Development", StringComparison.OrdinalIgnoreCase))
+            {
+                <span class="dev-chip">Development sign-in</span>
+            }
+        </div>
+        <div class="menu-sep"></div>
+        <span class="menu-label" id="theme-label">Theme</span>
+        <div class="segmented theme-choice" role="group" aria-labelledby="theme-label">
+            <button type="button" aria-pressed="false" data-theme-choice="light">@Icons.Get("sun")<span>Light</span></button>
+            <button type="button" aria-pressed="false" data-theme-choice="dark">@Icons.Get("moon")<span>Dark</span></button>
+            <button type="button" aria-pressed="false" data-theme-choice="system">@Icons.Get("monitor")<span>System</span></button>
+        </div>
+        <div class="menu-sep"></div>
+        <form method="post" action="/sign-out">
+            @Html.AntiForgeryToken()
+            <button class="menu-item" type="submit">@Icons.Get("logout")<span>Sign out</span></button>
+        </form>
+    </div>
+</div>

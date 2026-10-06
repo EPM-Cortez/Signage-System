@@ -27,8 +27,13 @@
             </label>
             <label class="field">
                 <span>Screen group</span>
-                <select asp-for="Input.ScreenGroupId"><option value="">Select a group</option>@foreach (var group in Model.Groups) { <option value="@group.Id">@group.Name</option> }</select>
+                <select asp-for="Input.ScreenGroupId" data-reveal="#new-group" data-reveal-value="@PairingModel.NewGroupOption"><option value="">Select a group</option>@foreach (var group in Model.Groups) { <option value="@group.Id">@group.Name</option> }<option value="@PairingModel.NewGroupOption">New group…</option></select>
                 <span asp-validation-for="Input.ScreenGroupId" class="validation"></span>
+            </label>
+            <label class="field" id="new-group" hidden="@(!Model.CreatingGroup)">
+                <span>New group name</span>
+                <input asp-for="Input.NewGroupName" maxlength="120" placeholder="Library" disabled="@(!Model.CreatingGroup)" />
+                <span asp-validation-for="Input.NewGroupName" class="validation"></span>
             </label>
             <button class="btn btn-primary btn-lg" type="submit">Approve device</button>
         </form>

@@ -11,25 +11,33 @@
     <div class="page-actions"><a class="btn btn-primary" asp-page="/Admin/Pairing">@Icons.Get("plus")Pair a device</a></div>
 </header>
 @if (TempData["Message"] is string message) { <div class="flash" role="status">@Icons.Get("check")@message</div> }
+@if (TempData["Error"] is string error) { <div class="flash flash-error" role="alert">@Icons.Get("alert")@error</div> }
+<nav class="library-tabs" aria-label="Device library">
+    <a class="@(Model.Archived ? "" : "is-selected")" asp-route-archived="false" aria-current="@(Model.Archived ? null : "page")">@Icons.Get("monitor")Active <span class="count">@Model.ActiveCount</span></a>
+    <a class="@(Model.Archived ? "is-selected" : "")" asp-route-archived="true" aria-current="@(Model.Archived ? "page" : null)">@Icons.Get("archive")Archived <span class="count">@Model.ArchivedCount</span></a>
+</nav>
 
 @if (Model.Devices.Count == 0)
 {
     <div class="card empty">
         @Icons.Get("monitor")
-        <strong>No devices have been paired</strong>
-        <a class="btn btn-primary" asp-page="/Admin/Pairing">Pair a device</a>
+        <strong>@(Model.Archived ? "No archived devices" : "No active devices")</strong>
+        @if (!Model.Archived) { <a class="btn btn-primary" asp-page="/Admin/Pairing">Pair a device</a> }
     </div>
 }
 else
 {
     <div class="toolbar" data-filter-controls="#device-list" data-filter-empty="#device-empty">
         <label class="search">@Icons.Get("search")<span class="visually-hidden">Search devices</span><input type="search" placeholder="Search devices" data-filter-search /></label>
+        @if (!Model.Archived)
+        {
         <div class="segmented" role="group" aria-label="Filter by state">
             <button type="button" data-filter-state="all" aria-pressed="true">All <span class="count">@states.Count</span></button>
             <button type="button" data-filter-state="online" aria-pressed="false">Online <span class="count">@states.Count(state => state == "online")</span></button>
             <button type="button" data-filter-state="offline" aria-pressed="false">Offline <span class="count">@states.Count(state => state == "offline")</span></button>
             <button type="button" data-filter-state="revoked" aria-pressed="false">Revoked <span class="count">@states.Count(state => state == "revoked")</span></button>
         </div>
+        }
     </div>
     <div class="card flush">
         <div class="table-wrap">
@@ -41,6 +49,7 @@ else
                     var state = Model.StateOf(device);
                     var playing = device.PlayingPresentationVersionId is Guid playingId && Model.PlayingVersions.TryGetValue(playingId, out var version) ? version : null;
                     var poster = state == "revoked" ? null : Posters.GetUrl(playing);
+                    var menuId = $"device-menu-{device.Id:N}";
                     <tr data-filter-item data-state="@state">
                         <td>
                             <div class="device-cell">
@@ -56,7 +65,12 @@ else
                             </div>
                         </td>
                         <td>
-                            @if (state == "revoked")
+                            @if (state == "archived")
+                            {
+                                <span class="pill">Archived</span>
+                                <span class="cell-sub">@Display.Ago(device.ArchivedUtc, now)</span>
+                            }
+                            else if (state == "revoked")
                             {
                                 <span class="pill">Revoked</span>
                                 <span class="cell-sub">@Display.Ago(device.RevokedUtc, now)</span>
@@ -68,6 +82,12 @@ else
                             }
                         </td>
                         <td>
+                            @if (Model.Archived)
+                            {
+                                <span>@(Model.Groups.FirstOrDefault(group => group.Id == device.ScreenGroupId)?.Name ?? "Unassigned")</span>
+                            }
+                            else
+                            {
                             <form method="post" asp-page-handler="Move" class="inline-form">
                                 <input type="hidden" name="deviceId" value="@device.Id" />
                                 <select name="screenGroupId" aria-label="Move @device.Name">
@@ -76,6 +96,7 @@ else
                                 </select>
                                 <button class="btn btn-secondary btn-sm" type="submit">Move</button>
                             </form>
+                            }
                         </td>
                         <td>
                             @if (playing is not null)
@@ -93,10 +114,25 @@ else
                             }
                         </td>
                         <td class="actions">
-                            @if (device.RevokedUtc is null)
-                            {
-                                <form method="post" asp-page-handler="Revoke"><input type="hidden" name="deviceId" value="@device.Id" /><button class="btn btn-danger btn-sm" type="submit">Revoke</button></form>
-                            }
+                            <div class="row-actions">
+                                @if (Model.Archived)
+                                {
+                                    <form method="post" asp-page-handler="Restore" asp-route-archived="true"><input type="hidden" name="deviceId" value="@device.Id" /><button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("undo")Restore</button></form>
+                                }
+                                <button class="icon-button menu-trigger" type="button" popovertarget="@menuId" aria-label="More actions for @device.Name" title="More actions">@Icons.Get("more")</button>
+                                <div class="menu" id="@menuId" popover>
+                                    @if (!Model.Archived)
+                                    {
+                                        <form method="post" asp-page-handler="Archive"><input type="hidden" name="deviceId" value="@device.Id" /><button class="menu-item" type="submit">@Icons.Get("archive")<span>Archive</span></button></form>
+                                        if (device.RevokedUtc is null)
+                                        {
+                                            <form method="post" asp-page-handler="Revoke"><input type="hidden" name="deviceId" value="@device.Id" /><button class="menu-item" type="submit">@Icons.Get("ban")<span>Revoke access</span></button></form>
+                                        }
+                                        <div class="menu-sep" role="separator"></div>
+                                    }
+                                    <form method="post" asp-page-handler="Delete" asp-route-archived="@Model.Archived" data-confirm="Delete &quot;@device.Name&quot;? This removes its pairing permanently. The device must be paired again to return."><input type="hidden" name="deviceId" value="@device.Id" /><input type="hidden" name="confirmed" value="false" /><button class="menu-item is-danger" type="submit">@Icons.Get("trash")<span>Delete permanently</span></button></form>
+                                </div>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -106,3 +142,4 @@ else
         <p class="filter-empty" id="device-empty" hidden>No devices match.</p>
     </div>
 }
+<p class="note">@Icons.Get("info")<span>Archiving keeps the device record and blocks server access until it is restored. Deleting removes the pairing permanently.</span></p>

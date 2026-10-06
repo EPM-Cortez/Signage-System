@@ -66,10 +66,12 @@ public interface IPresentationInspector
 
 public interface IConverterRunner
 {
+    /// <param name="slideRendered">Called with the running count of rasterised slides.</param>
     Task<ConverterResult> RenderAsync(
         string sourcePath,
         string outputDirectory,
         string settingsPath,
+        Action<int>? slideRendered,
         CancellationToken cancellationToken);
 
     Task<bool> CheckHealthAsync(CancellationToken cancellationToken);

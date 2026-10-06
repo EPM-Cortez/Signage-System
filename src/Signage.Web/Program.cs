@@ -149,6 +149,8 @@ builder.Services.AddScoped<StaffAccessService>();
 builder.Services.AddScoped<StaffCookieEvents>();
 builder.Services.AddSingleton<IActiveDirectoryAuthenticator, ActiveDirectoryAuthenticator>();
 builder.Services.AddScoped<PairingService>();
+builder.Services.AddScoped<DeviceManagementService>();
+builder.Services.AddScoped<PresentationLibraryService>();
 builder.Services.AddScoped<DevelopmentSeeder>();
 builder.Services.AddSingleton<OperationalMetrics>();
 builder.Services.AddSingleton<SlidePosters>();
@@ -245,7 +247,7 @@ if (app.Environment.IsDevelopment() && authMode.Equals("Development", StringComp
             var monitor = Signage.Web.Ui.Icons.Get("monitor").ToString();
             var chevron = Signage.Web.Ui.Icons.Get("chevron-right").ToString();
             return Results.Content($$"""
-                <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · School Signage</title><link rel="stylesheet" href="/css/site.css"></head>
+                <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sign in · School Signage</title><link rel="stylesheet" href="/css/site.css"><script src="/js/prefs.js"></script></head>
                 <body class="signin"><main class="signin-card">
                 <div class="signin-head"><span class="brand"><span class="brand-mark">{{monitor}}</span><span>School Signage</span></span><span class="dev-chip">Development sign-in</span></div>
                 <h1>Sign in</h1>

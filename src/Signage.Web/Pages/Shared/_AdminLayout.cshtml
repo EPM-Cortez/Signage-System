@@ -1,4 +1,3 @@
-@inject Microsoft.Extensions.Options.IOptions<Signage.Application.AuthenticationOptions> Authentication
 @{
     var currentPage = ViewContext.RouteData.Values["page"] as string ?? string.Empty;
     // Pages without their own nav entry highlight the section they belong to.
@@ -19,6 +18,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@ViewData["Title"] · School Signage</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="~/js/prefs.js" asp-append-version="true"></script>
 </head>
 <body class="admin">
     <div class="shell">
@@ -26,9 +26,12 @@
             <div class="sidebar-top">
                 <a class="brand" asp-page="/Admin/Index">
                     <span class="brand-mark">@Icons.Get("monitor")</span>
-                    <span>School Signage</span>
+                    <span class="nav-label">School Signage</span>
                 </a>
-                <button class="icon-button nav-toggle" type="button" aria-controls="admin-nav" aria-expanded="false" aria-label="Menu" data-nav-toggle>@Icons.Get("menu")</button>
+                <div class="sidebar-tools">
+                    <button class="icon-button sidebar-pin nav-label" type="button" aria-pressed="false" aria-label="Pin sidebar" title="Pin sidebar open" data-nav-pin>@Icons.Get("pin")</button>
+                    <button class="icon-button nav-toggle" type="button" aria-controls="admin-nav" aria-expanded="false" aria-label="Menu" data-nav-toggle>@Icons.Get("menu")</button>
+                </div>
             </div>
             <nav class="nav" id="admin-nav" aria-label="Administration">
                 @foreach (var navSection in sections)
@@ -36,28 +39,17 @@
                     <div class="nav-section">
                         @if (navSection.Title is not null)
                         {
-                            <span class="nav-heading">@navSection.Title</span>
+                            <span class="nav-heading"><span class="nav-label">@navSection.Title</span></span>
                         }
                         @foreach (var item in navSection.Items)
                         {
-                            <a class="nav-link" asp-page="@item.Page" aria-current="@Current(item.Page)">@Icons.Get(item.Icon)<span>@item.Label</span></a>
+                            <a class="nav-link" asp-page="@item.Page" aria-current="@Current(item.Page)">@Icons.Get(item.Icon)<span class="nav-label">@item.Label</span></a>
                         }
                     </div>
                 }
             </nav>
             <div class="sidebar-foot">
-                @if (Authentication.Value.Mode.Equals("Development", StringComparison.OrdinalIgnoreCase))
-                {
-                    <span class="dev-chip">Development sign-in</span>
-                }
-                <div class="account">
-                    <span class="avatar" aria-hidden="true">@Display.Initials(User.Identity?.Name)</span>
-                    <span class="account-name">@User.Identity?.Name</span>
-                    <form method="post" action="/sign-out">
-                        @Html.AntiForgeryToken()
-                        <button class="icon-button" type="submit" aria-label="Sign out" title="Sign out">@Icons.Get("logout")</button>
-                    </form>
-                </div>
+                <partial name="_AccountMenu" />
             </div>
         </aside>
         <main class="main">

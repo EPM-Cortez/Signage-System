@@ -1,7 +1,12 @@
 @page
 @using Signage.Domain
 @model Signage.Web.Pages.Admin.AccessModel
-@{ Layout = "_AdminLayout"; ViewData["Title"] = "Staff access"; }
+@{
+    Layout = "_AdminLayout"; ViewData["Title"] = "Staff access";
+    var now = DateTimeOffset.UtcNow;
+    string StateOf(StaffAccount person) => !person.IsEnabled ? "disabled" : person.Role == StaffRole.Pending ? "pending" : "active";
+    var states = Model.People.Select(StateOf).ToList();
+}
 <header class="page-head"><h1>Staff access</h1><a class="btn btn-secondary" asp-page="/Admin/Directory">Test Active Directory</a></header>
 @if (!ViewData.ModelState.IsValid) { <div asp-validation-summary="All" class="validation" role="alert"></div> }
 @if (Model.Message is not null) { <p class="notice" role="status">@Model.Message</p> }
@@ -30,28 +35,50 @@
 <h2 class="section-title">Staff accounts</h2>
 <div class="toolbar" data-filter-controls="#staff-list" data-filter-empty="#staff-empty">
     <label class="search">@Icons.Get("search")<span class="visually-hidden">Search staff</span><input type="search" placeholder="Search staff" data-filter-search /></label>
+    <div class="segmented" role="group" aria-label="Filter by status">
+        <button type="button" data-filter-state="all" aria-pressed="true">All <span class="count">@states.Count</span></button>
+        <button type="button" data-filter-state="active" aria-pressed="false">Active <span class="count">@states.Count(state => state == "active")</span></button>
+        <button type="button" data-filter-state="pending" aria-pressed="false">Awaiting approval <span class="count">@states.Count(state => state == "pending")</span></button>
+        <button type="button" data-filter-state="disabled" aria-pressed="false">Disabled <span class="count">@states.Count(state => state == "disabled")</span></button>
+    </div>
 </div>
 <div class="stack" id="staff-list">
-@foreach (var person in Model.People)
+@foreach (var (title, hint, people) in new[] { ("Staff", "Teachers publish only to the screen groups you choose.", Model.StaffMembers), ("Administrators", "Administrators manage the system and publish to every group.", Model.Administrators) })
 {
-    var grants = Model.Access.Where(item => item.IdentitySubject == person.IdentitySubject).Select(item => item.ScreenGroupId).ToHashSet();
-    <section class="card staff-card" data-filter-item>
-        <div class="card-head"><div><h2>@person.DisplayName</h2><p class="muted">@person.LoginName · @person.Provider</p></div><span class="pill @(person.IsEnabled ? person.Role == StaffRole.Pending ? "pill-warn" : "pill-good" : "pill-bad")">@(person.IsEnabled ? person.Role == StaffRole.Pending ? "Awaiting approval" : person.Role.ToString() : "Disabled")</span></div>
-        <div class="card-body">
-            <form method="post" asp-page-handler="Save" class="form-stack" aria-label="Permissions for @person.LoginName">
-                <input type="hidden" name="id" value="@person.Id" />
-                <div class="form-row">
-                    <label class="field"><span>Role for @person.LoginName</span><select name="Input.Role">
-                        @foreach (var role in Enum.GetValues<StaffRole>()) { <option value="@role" selected="@(role == person.Role)">@(role == StaffRole.Pending ? "Pending approval" : role.ToString())</option> }
-                    </select></label>
-                    <label class="check"><input type="checkbox" name="Input.IsEnabled" value="true" checked="@person.IsEnabled" /><input type="hidden" name="Input.IsEnabled" value="false" /><span>Account enabled</span></label>
-                </div>
-                <fieldset class="staff-groups"><legend>Teacher screen groups (administrators have all groups)</legend>
-                    @foreach (var group in Model.Groups) { <label class="check"><input type="checkbox" name="Input.ScreenGroupIds" value="@group.Id" checked="@grants.Contains(group.Id)" /><span>@group.Name</span></label> }
-                </fieldset>
-                <div class="staff-save"><span class="muted">@(person.LastSignInUtc.HasValue ? "Last sign-in: " + person.LastSignInUtc.Value.ToLocalTime().ToString("d MMM yyyy HH:mm") : "Not signed in yet")</span><button class="btn btn-primary" type="submit">Save permissions</button></div>
-            </form>
-        </div>
+    <section class="card flush" data-filter-group aria-label="@title">
+        <div class="card-head access-head"><h2>@title <span class="count">@people.Count</span></h2><span class="subtle">@hint</span></div>
+        @if (people.Count == 0) { <p class="access-empty">No @title.ToLowerInvariant() yet.</p> }
+        @foreach (var person in people)
+        {
+            var state = StateOf(person);
+            var grants = Model.Access.Where(item => item.IdentitySubject == person.IdentitySubject).Select(item => item.ScreenGroupId).ToHashSet();
+            var granted = Model.Groups.Where(group => grants.Contains(group.Id)).Select(group => group.Name).ToList();
+            var groupSummary = person.Role == StaffRole.Administrator ? "All screen groups" : granted.Count == 0 ? "No screen groups" : string.Join(", ", granted);
+            var lastSignIn = person.LastSignInUtc is { } signedIn ? Display.DateTime(signedIn) : null;
+            <details class="access-item" data-filter-item data-state="@state" open="@(Model.OpenId == person.Id)">
+                <summary class="access-row" data-filter-text>
+                    <span class="avatar" aria-hidden="true">@Display.Initials(person.DisplayName)</span>
+                    <span class="access-name"><strong>@person.DisplayName</strong><small>@(person.DisplayName == person.LoginName ? person.Provider : $"{person.LoginName} · {person.Provider}")</small></span>
+                    <span class="access-groups @(granted.Count == 0 && person.Role != StaffRole.Administrator ? "is-empty" : "")" title="@groupSummary">@groupSummary</span>
+                    <span class="access-seen" title="@lastSignIn">@(lastSignIn is null ? "Never signed in" : $"Signed in {Display.Ago(person.LastSignInUtc, now)}")</span>
+                    <span class="pill @(state == "active" ? "pill-good" : state == "pending" ? "pill-warn" : "pill-bad")">@(state == "active" ? "Active" : state == "pending" ? "Awaiting approval" : "Disabled")</span>
+                    @Icons.Get("chevron-right")
+                </summary>
+                <form method="post" asp-page-handler="Save" class="access-form form-stack" aria-label="Permissions for @person.LoginName">
+                    <input type="hidden" name="id" value="@person.Id" />
+                    <div class="form-row">
+                        <label class="field"><span>Role</span><select name="Input.Role" aria-label="Role for @person.LoginName">
+                            @foreach (var role in Enum.GetValues<StaffRole>()) { <option value="@role" selected="@(role == person.Role)">@(role == StaffRole.Pending ? "Pending approval" : role.ToString())</option> }
+                        </select></label>
+                        <label class="check"><input type="checkbox" name="Input.IsEnabled" value="true" checked="@person.IsEnabled" /><input type="hidden" name="Input.IsEnabled" value="false" /><span>Account enabled</span></label>
+                    </div>
+                    <fieldset class="staff-groups"><legend>Teacher screen groups (administrators have all groups)</legend>
+                        @foreach (var group in Model.Groups) { <label class="check"><input type="checkbox" name="Input.ScreenGroupIds" value="@group.Id" checked="@grants.Contains(group.Id)" /><span>@group.Name</span></label> }
+                    </fieldset>
+                    <div class="staff-save"><span class="subtle">Added @Display.DateTime(person.CreatedUtc) · @(lastSignIn is null ? "Not signed in yet" : $"Last sign-in {lastSignIn}")</span><button class="btn btn-primary" type="submit">Save permissions</button></div>
+                </form>
+            </details>
+        }
     </section>
 }
 </div>

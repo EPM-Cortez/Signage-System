@@ -2,14 +2,23 @@
 @model StatusModel
 @{ ViewData["Title"] = "Preparing presentation"; }
 <section class="card status-card" data-status-url="/api/presentation-versions/@Model.VersionId/status">
-    <div class="status-mark" aria-hidden="true">
-        <span class="spinner"></span>
+    <div class="status-mark is-indeterminate" role="progressbar" aria-label="Preparation progress" aria-valuemin="0" aria-valuemax="100" data-progress-ring>
+        <svg class="ring" viewBox="0 0 48 48" aria-hidden="true">
+            <circle class="ring-track" cx="24" cy="24" r="21" />
+            <circle class="ring-value" cx="24" cy="24" r="21" pathLength="100" data-ring-value />
+        </svg>
+        <span class="ring-label" aria-hidden="true" data-ring-label></span>
         @Icons.Get("check", "icon-ready")
         @Icons.Get("alert", "icon-failed")
     </div>
     <h1 data-status-heading>Preparing for screens</h1>
+    <p class="status-stage" data-status-stage>Waiting to start</p>
     <p data-status-message>You can close this page. Preparation continues on the server.</p>
-    <div class="progress" role="progressbar" aria-label="Preparation in progress"><span></span></div>
+    <div class="delivery hidden" data-delivery>
+        <strong data-delivery-title></strong>
+        <div class="progress progress-determinate" aria-hidden="true" data-delivery-bar><span></span></div>
+        <p class="delivery-note" data-delivery-note></p>
+    </div>
     <div class="status-actions">
         <a class="btn btn-primary hidden" data-preview-link href="#">@Icons.Get("eye")Open preview</a>
         <a class="btn btn-secondary" asp-page="/Publish">Upload another</a>

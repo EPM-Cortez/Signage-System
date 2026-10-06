@@ -59,7 +59,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     ? join(repositoryRoot, '.dotnet', 'dotnet.exe')
     : join(repositoryRoot, '.dotnet', 'dotnet');
   const dotnet = process.env.SIGNAGE_DOTNET || localDotnet;
-  const webAssembly = join(repositoryRoot, 'src', 'Signage.Web', 'bin', 'Debug', 'net10.0', 'Signage.Web.dll');
+  const webAssembly = process.env.SIGNAGE_WEB_ASSEMBLY
+    || join(repositoryRoot, 'src', 'Signage.Web', 'bin', 'Debug', 'net10.0', 'Signage.Web.dll');
   const child = spawn(dotnet, [webAssembly, '--urls', 'http://127.0.0.1:5189'], {
     cwd: repositoryRoot,
     shell: false,

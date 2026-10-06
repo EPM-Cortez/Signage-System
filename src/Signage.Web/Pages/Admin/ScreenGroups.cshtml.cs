@@ -43,7 +43,7 @@ public sealed class ScreenGroupsModel(IDbContextFactory<SignageDbContext> dbFact
         var offlineBefore = now.AddSeconds(-options.Value.OfflineAfterSeconds);
         Groups = groups.Select(group =>
         {
-            var devices = group.Devices.Where(item => item.RevokedUtc == null).ToList();
+            var devices = group.Devices.Where(item => item.RevokedUtc == null && item.ArchivedUtc == null).ToList();
             var online = devices.Count(item => item.LastSeenUtc >= offlineBefore);
             return new GroupCard(group, PublicationRules.SelectActive(group.Publications, now)?.PresentationVersion, online, devices.Count - online);
         }).ToList();

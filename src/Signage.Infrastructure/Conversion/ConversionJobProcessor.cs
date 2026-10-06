@@ -18,6 +18,7 @@ public sealed class ConversionJobProcessor(
     IConverterRunner converter,
     PptxVideoExtractor videoExtractor,
     IContentStorage storage,
+    ConversionProgressTracker progress,
     IOptions<RenderingOptions> renderingOptions,
     IOptions<StorageOptions> storageOptions,
     IHostEnvironment environment,
@@ -85,6 +86,7 @@ public sealed class ConversionJobProcessor(
         var tempRoot = Path.GetFullPath(options.TempRoot, environment.ContentRootPath);
         var attemptDirectory = Path.Combine(tempRoot, $"attempt-{jobId:N}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(attemptDirectory);
+        Guid? versionId = null;
 
         try
         {
@@ -95,8 +97,11 @@ public sealed class ConversionJobProcessor(
             await using var loadDb = await dbFactory.CreateDbContextAsync(cancellationToken);
             var job = await loadDb.ConversionJobs.AsNoTracking().SingleAsync(item => item.Id == jobId, cancellationToken);
             var version = await loadDb.PresentationVersions.AsNoTracking().SingleAsync(item => item.Id == job.PresentationVersionId, cancellationToken);
+            versionId = version.Id;
+            progress.Report(version.Id, ConversionProgress.Starting);
             var sourcePath = storage.GetSourcePath(version.SourceStorageKey);
             var inspection = await inspector.InspectAsync(sourcePath, cancellationToken);
+            var slideCount = inspection.Slides.Count;
             var outputDirectory = Path.Combine(attemptDirectory, "rendered");
             Directory.CreateDirectory(outputDirectory);
             var settingsPath = Path.Combine(attemptDirectory, "settings.json");
@@ -112,11 +117,18 @@ public sealed class ConversionJobProcessor(
                 diagnosticVerbosity = "normal"
             }), cancellationToken);
 
-            var result = await converter.RenderAsync(sourcePath, outputDirectory, settingsPath, cancellationToken);
+            progress.Report(version.Id, ConversionProgress.Rendering(0, slideCount));
+            var result = await converter.RenderAsync(
+                sourcePath,
+                outputDirectory,
+                settingsPath,
+                rendered => progress.Report(version.Id, ConversionProgress.Rendering(rendered, slideCount)),
+                cancellationToken);
             if (result.ExitCode != 0)
             {
                 throw new ConverterProcessException($"Converter exited with code {result.ExitCode}: {result.StandardError}");
             }
+            progress.Report(version.Id, ConversionProgress.Packaging(slideCount));
 
             var packageDirectory = Path.Combine(attemptDirectory, "package");
             var packageSlides = Path.Combine(packageDirectory, "slides");
@@ -190,6 +202,11 @@ public sealed class ConversionJobProcessor(
         }
         finally
         {
+            // The version row now says Ready, Failed or Queued for retry, which supersedes live progress.
+            if (versionId is { } id)
+            {
+                progress.Clear(id);
+            }
             try
             {
                 if (Directory.Exists(attemptDirectory))
@@ -247,7 +264,7 @@ public sealed class ConversionJobProcessor(
 
         // Queued conversion must not publish after the uploader loses access.
         var allowedGroups = await StaffPermissions.AllowedGroupsAsync(db, presentation.CreatedBySubject, cancellationToken);
-        var requestedTargets = version.PublishTargets.Where(item => item.PublishWhenReady).ToList();
+        var requestedTargets = version.PublishTargets.Where(item => item.PublishWhenReady && presentation.ArchivedUtc is null).ToList();
         foreach (var target in requestedTargets.Where(item => allowedGroups.Contains(item.ScreenGroupId)))
         {
             db.Publications.Add(new Publication

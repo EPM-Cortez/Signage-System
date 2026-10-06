@@ -26,6 +26,7 @@ Open `http://localhost:5179/dev-login`. Development provides teacher and adminis
 
 - Teacher: sign in, open Publish, select a permitted group, upload a `.pptx`, and watch the durable status page.
 - Administrator: monitor failures/devices, approve a six-digit pairing code, move or revoke displays, retry conversions, and roll back a group to a ready version.
+- Library management: archive and restore old devices or PowerPoints, permanently delete unwanted records, and create/rename folders to organise presentations. Removing a folder keeps its contents in Unfiled.
 - Staff access: assign Administrator/Teacher/Pending roles, enable or disable accounts, and choose each teacher's permitted screen groups. Active Directory supports username/password sign-in over LDAPS plus an admin-only connection test.
 - Player: open `/player/`, pair once, then run full-screen. Its credential is returned once, stored in IndexedDB, and represented server-side only by a SHA-256 hash.
 

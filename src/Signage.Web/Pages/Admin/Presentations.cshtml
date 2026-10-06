@@ -6,172 +6,296 @@
     Layout = "_AdminLayout"; ViewData["Title"] = "Presentations";
     var entries = Model.Presentations;
     int Count(string state) => entries.Count(entry => entry.Versions.Any(version => Display.StatusFilter(version.Status) == state));
+    var selectedFolder = Model.SelectedFolder;
+    var allSelected = Model.FolderId is null && !Model.Unfiled;
+    var viewTitle = selectedFolder?.Name ?? (Model.FolderId is not null ? "Folder" : Model.Unfiled ? "Unfiled" : "All presentations");
+    var viewIcon = Model.FolderId is not null ? "folder" : Model.Unfiled ? "inbox" : "slides";
+    var viewSummary = $"{entries.Count} {(Model.Archived ? "archived " : "")}{(entries.Count == 1 ? "presentation" : "presentations")}";
 }
 <header class="page-head">
     <h1>Presentations</h1>
     <div class="page-actions"><a class="btn btn-primary" asp-page="/Publish">@Icons.Get("upload")Upload</a></div>
 </header>
 @if (TempData["Message"] is string message) { <div class="flash" role="status">@Icons.Get("check")@message</div> }
+@if (TempData["Error"] is string error) { <div class="flash flash-error" role="alert">@Icons.Get("alert")@error</div> }
+<nav class="library-tabs" aria-label="Presentation library">
+    <a class="@(Model.Archived ? "" : "is-selected")" asp-route-archived="false" asp-route-folderId="@Model.FolderId" asp-route-unfiled="@Model.Unfiled" aria-current="@(Model.Archived ? null : "page")">@Icons.Get("slides")Active <span class="count">@Model.ActiveCount</span></a>
+    <a class="@(Model.Archived ? "is-selected" : "")" asp-route-archived="true" asp-route-folderId="@Model.FolderId" asp-route-unfiled="@Model.Unfiled" aria-current="@(Model.Archived ? "page" : null)">@Icons.Get("archive")Archived <span class="count">@Model.ArchivedCount</span></a>
+</nav>
 
-@if (entries.Count == 0)
-{
-    <div class="card empty">
-        @Icons.Get("slides")
-        <strong>No presentations have been uploaded</strong>
-        <a class="btn btn-primary" asp-page="/Publish">Upload a presentation</a>
-    </div>
-}
-else
-{
-    <div class="toolbar" data-filter-controls="#presentation-list" data-filter-empty="#presentation-empty">
-        <label class="search">@Icons.Get("search")<span class="visually-hidden">Search presentations</span><input type="search" placeholder="Search presentations" data-filter-search /></label>
-        <div class="segmented" role="group" aria-label="Filter by status">
-            <button type="button" data-filter-state="all" aria-pressed="true">All <span class="count">@entries.Count</span></button>
-            <button type="button" data-filter-state="ready" aria-pressed="false">Ready <span class="count">@Count("ready")</span></button>
-            <button type="button" data-filter-state="preparing" aria-pressed="false">Preparing <span class="count">@Count("preparing")</span></button>
-            <button type="button" data-filter-state="failed" aria-pressed="false">Failed <span class="count">@Count("failed")</span></button>
+<div class="explorer">
+    <aside class="card folder-pane" aria-label="Folders">
+        <nav class="folder-nav" aria-label="Folders">
+            <a class="folder-link" asp-route-archived="@Model.Archived" aria-current="@(allSelected ? "page" : null)">@Icons.Get("slides")<span class="folder-name">All presentations</span><span class="count">@(Model.Archived ? Model.ArchivedCount : Model.ActiveCount)</span></a>
+            <a class="folder-link" asp-route-archived="@Model.Archived" asp-route-unfiled="true" aria-current="@(Model.FolderId is null && Model.Unfiled ? "page" : null)">@Icons.Get("inbox")<span class="folder-name">Unfiled</span><span class="count">@Model.UnfiledCount</span></a>
+            <span class="folder-heading">Folders</span>
+            @foreach (var folder in Model.Folders)
+            {
+                <a class="folder-link" asp-route-archived="@Model.Archived" asp-route-folderId="@folder.Id" aria-current="@(folder.Id == Model.FolderId ? "page" : null)" title="@folder.Name">@Icons.Get("folder")<span class="folder-name">@folder.Name</span><span class="count">@Model.FolderCounts.GetValueOrDefault(folder.Id)</span></a>
+            }
+            @if (Model.Folders.Count == 0) { <span class="folder-none">No folders yet</span> }
+        </nav>
+        <button class="folder-link folder-new" type="button" popovertarget="new-folder">@Icons.Get("folder-plus")<span class="folder-name">New folder</span></button>
+        <div class="menu menu-form" id="new-folder" popover data-align="start">
+            <form method="post" asp-page-handler="CreateFolder" asp-route-archived="@Model.Archived" class="form-stack">
+                <label class="field"><span>New folder</span><input name="folderName" type="text" placeholder="For example, Assemblies" maxlength="120" required /></label>
+                <div class="menu-form-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" popovertarget="new-folder" popovertargetaction="hide">Cancel</button>
+                    <button class="btn btn-primary btn-sm" type="submit">Create folder</button>
+                </div>
+            </form>
         </div>
-    </div>
+    </aside>
 
-    <div class="pres-list" id="presentation-list">
-    @foreach (var entry in entries)
-    {
-        var presentation = entry.Presentation;
-        var latest = entry.Latest;
-        var poster = Posters.GetUrl(entry.Showcase);
-        var onScreen = entry.Versions.SelectMany(version => Model.OnScreen[version.Id]).Distinct().ToList();
-        var states = string.Join(' ', entry.Versions.Select(version => Display.StatusFilter(version.Status)).Distinct());
-        <article class="card flush" data-filter-item data-state="@states">
-            <div class="pres-head">
-                @if (poster is not null)
+    <section class="explorer-main" aria-labelledby="folder-title">
+        <header class="folder-head">
+            <span class="folder-head-icon">@Icons.Get(viewIcon)</span>
+            <div class="folder-head-text">
+                <h2 id="folder-title">@viewTitle</h2>
+                <p class="muted">@viewSummary</p>
+            </div>
+            @if (selectedFolder is not null)
+            {
+                <div class="folder-head-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" popovertarget="rename-folder">@Icons.Get("pencil")Rename</button>
+                    <div class="menu menu-form" id="rename-folder" popover>
+                        <form method="post" asp-page-handler="RenameFolder" asp-route-folderId="@Model.FolderId" asp-route-archived="@Model.Archived" class="form-stack">
+                            <input type="hidden" name="id" value="@selectedFolder.Id" />
+                            <label class="field"><span>Folder name</span><input name="folderName" type="text" value="@selectedFolder.Name" maxlength="120" required /></label>
+                            <div class="menu-form-actions">
+                                <button class="btn btn-ghost btn-sm" type="button" popovertarget="rename-folder" popovertargetaction="hide">Cancel</button>
+                                <button class="btn btn-primary btn-sm" type="submit">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                    <form method="post" asp-page-handler="DeleteFolder" asp-route-folderId="@Model.FolderId" asp-route-archived="@Model.Archived" data-confirm="Remove folder &quot;@selectedFolder.Name&quot;? Its presentations will move to Unfiled and will be kept.">
+                        <input type="hidden" name="id" value="@selectedFolder.Id" /><input type="hidden" name="confirmed" value="false" />
+                        <button class="btn btn-ghost btn-sm is-danger" type="submit">@Icons.Get("trash")Remove folder</button>
+                    </form>
+                </div>
+            }
+        </header>
+
+        @if (entries.Count == 0)
+        {
+            <div class="card empty">
+                @Icons.Get(Model.FolderId is not null ? "folder" : "slides")
+                @if (Model.Archived)
                 {
-                    <a class="thumb thumb-md" asp-page="/Preview" asp-route-versionId="@entry.Showcase!.Id" aria-label="Preview @presentation.Name"><img src="@poster" alt="" loading="lazy" /></a>
+                    <strong>No archived presentations here</strong>
+                }
+                else if (Model.FolderId is not null)
+                {
+                    <strong>This folder is empty</strong>
+                    <span>Use the @Icons.Get("more", "icon-inline") menu on a presentation to move it here.</span>
                 }
                 else
                 {
-                    <span class="thumb thumb-md thumb-empty @(latest.Status == PresentationVersionStatus.Failed ? "is-failed" : "is-busy")">@Icons.Get(latest.Status == PresentationVersionStatus.Failed ? "alert" : "slides")</span>
+                    <strong>No presentations here</strong>
+                    <a class="btn btn-primary" asp-page="/Publish">Upload a presentation</a>
                 }
-                <div class="pres-title">
-                    <h2>@presentation.Name</h2>
-                    <div class="meta">
-                        <span>@Icons.Get("file")@latest.OriginalFileName</span>
-                        <span>@Icons.Get("user")@presentation.CreatedBySubject</span>
-                        <span title="@Display.DateTime(latest.CreatedUtc)">@Icons.Get("clock")Updated @Display.Ago(latest.CreatedUtc, Model.Now)</span>
-                    </div>
-                    @if (onScreen.Count > 0)
-                    {
-                        <div class="on-screen">
-                            <span class="pill pill-live">On screen</span>
-                            @foreach (var group in onScreen) { <span class="chip chip-static">@group</span> }
-                        </div>
-                    }
+            </div>
+        }
+        else
+        {
+            <div class="toolbar" data-filter-controls="#presentation-list" data-filter-empty="#presentation-empty">
+                <label class="search">@Icons.Get("search")<span class="visually-hidden">Search presentations</span><input type="search" placeholder="Search presentations" data-filter-search /></label>
+                <div class="segmented" role="group" aria-label="Filter by status">
+                    <button type="button" data-filter-state="all" aria-pressed="true">All <span class="count">@entries.Count</span></button>
+                    <button type="button" data-filter-state="ready" aria-pressed="false">Ready <span class="count">@Count("ready")</span></button>
+                    <button type="button" data-filter-state="preparing" aria-pressed="false">Preparing <span class="count">@Count("preparing")</span></button>
+                    <button type="button" data-filter-state="failed" aria-pressed="false">Failed <span class="count">@Count("failed")</span></button>
                 </div>
-                <span class="pill pill-@Display.StatusTone(latest.Status)">@Display.StatusLabel(latest.Status)</span>
             </div>
 
-            <div class="versions">
-            @foreach (var version in entry.Versions)
+            <div class="pres-list" id="presentation-list">
+            @foreach (var entry in entries)
             {
-                var diagnostics = Signage.Web.Pages.Admin.PresentationsModel.ParseDiagnostics(version.DiagnosticsJson);
-                var failed = version.Status == PresentationVersionStatus.Failed;
-                var ready = version.Status == PresentationVersionStatus.Ready;
-                <div class="version">
-                    <div class="version-row">
-                        <span class="version-label">Version @version.VersionNumber @if (version.Id == presentation.CurrentVersionId) { <span class="tag tag-solid">Current</span> }</span>
-                        <span><span class="pill pill-@Display.StatusTone(version.Status)">@Display.StatusLabel(version.Status)</span></span>
-                        <span>
-                            @if (version.SlideCount > 0)
+                var presentation = entry.Presentation;
+                var latest = entry.Latest;
+                var poster = Posters.GetUrl(entry.Showcase);
+                var onScreen = entry.Versions.SelectMany(version => Model.OnScreen[version.Id]).Distinct().ToList();
+                var states = string.Join(' ', entry.Versions.Select(version => Display.StatusFilter(version.Status)).Distinct());
+                var menuId = $"presentation-menu-{presentation.Id:N}";
+                <article class="card pres-card" data-filter-item data-state="@states" data-presentation-id="@presentation.Id">
+                    <div class="pres-head">
+                        @if (poster is not null)
+                        {
+                            <a class="thumb thumb-md" asp-page="/Preview" asp-route-versionId="@entry.Showcase!.Id" aria-label="Preview @presentation.Name"><img src="@poster" alt="" loading="lazy" /></a>
+                        }
+                        else
+                        {
+                            <span class="thumb thumb-md thumb-empty @(latest.Status == PresentationVersionStatus.Failed ? "is-failed" : "is-busy")">@Icons.Get(latest.Status == PresentationVersionStatus.Failed ? "alert" : "slides")</span>
+                        }
+                        <div class="pres-title" data-filter-text>
+                            <h3>@presentation.Name</h3>
+                            <div class="meta">
+                                @if (allSelected) { <span>@Icons.Get(presentation.Folder is null ? "inbox" : "folder")@(presentation.Folder?.Name ?? "Unfiled")</span> }
+                                <span>@Icons.Get("file")@latest.OriginalFileName</span>
+                                <span>@Icons.Get("user")@presentation.CreatedBySubject</span>
+                                <span title="@Display.DateTime(latest.CreatedUtc)">@Icons.Get("clock")Updated @Display.Ago(latest.CreatedUtc, Model.Now)</span>
+                            </div>
+                            @if (onScreen.Count > 0)
                             {
-                                <text>@version.SlideCount @(version.SlideCount == 1 ? "slide" : "slides")</text>
-                                if (version.TotalDurationMs > 0) { <span class="cell-sub">@Display.Duration(version.TotalDurationMs) loop</span> }
+                                <div class="on-screen">
+                                    <span class="pill pill-live">On screen</span>
+                                    @foreach (var group in onScreen) { <span class="chip chip-static">@group</span> }
+                                </div>
+                            }
+                        </div>
+                        <div class="pres-aside">
+                            @if (Model.Archived)
+                            {
+                                <span class="pill">Archived</span>
+                                <form method="post" asp-page-handler="Restore" asp-route-folderId="@Model.FolderId" asp-route-unfiled="@Model.Unfiled" asp-route-archived="true"><input type="hidden" name="presentationId" value="@presentation.Id" /><button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("undo")Restore</button></form>
                             }
                             else
                             {
-                                <span class="muted">No slides yet</span>
+                                <span class="pill pill-@Display.StatusTone(latest.Status)">@Display.StatusLabel(latest.Status)</span>
                             }
-                        </span>
-                        <span class="muted">@(version.ReadyUtc is DateTimeOffset preparedUtc ? $"Prepared {Display.DateTime(preparedUtc)}" : $"Uploaded {Display.DateTime(version.CreatedUtc)}")</span>
-                        <div class="version-actions">
-                            @if (failed)
-                            {
-                                <form method="post" asp-page-handler="Retry"><input type="hidden" name="versionId" value="@version.Id" /><button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("refresh")Retry</button></form>
-                            }
-                            @if (ready)
-                            {
-                                <a class="btn btn-secondary btn-sm" asp-page="/Preview" asp-route-versionId="@version.Id">@Icons.Get("eye")Preview</a>
-                                if (Model.Groups.Count > 0)
+                            <button class="icon-button menu-trigger" type="button" popovertarget="@menuId" aria-label="More actions for @presentation.Name" title="More actions">@Icons.Get("more")</button>
+                            <div class="menu" id="@menuId" popover>
+                                <p class="menu-label">Move to folder</p>
+                                @if (Model.Folders.Count == 0)
                                 {
-                                    <form method="post" asp-page-handler="Rollback" class="inline-form">
-                                        <input type="hidden" name="versionId" value="@version.Id" />
-                                        <select name="screenGroupId" aria-label="Screen group for version @version.VersionNumber of @presentation.Name">@foreach (var group in Model.Groups) { <option value="@group.Id">@group.Name</option> }</select>
-                                        <button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("send")Publish</button>
+                                    <p class="menu-hint">Create a folder to start organising presentations.</p>
+                                }
+                                else
+                                {
+                                    <form method="post" asp-page-handler="Move" asp-route-folderId="@Model.FolderId" asp-route-unfiled="@Model.Unfiled" asp-route-archived="@Model.Archived" class="menu-scroll">
+                                        <input type="hidden" name="presentationId" value="@presentation.Id" />
+                                        <button class="menu-item" type="submit" name="targetFolderId" value="" disabled="@(presentation.FolderId is null)">@Icons.Get("inbox")<span>Unfiled</span>@if (presentation.FolderId is null) { @Icons.Get("check", "menu-check") }</button>
+                                        @foreach (var folder in Model.Folders)
+                                        {
+                                            var here = presentation.FolderId == folder.Id;
+                                            <button class="menu-item" type="submit" name="targetFolderId" value="@folder.Id" disabled="@here">@Icons.Get("folder")<span>@folder.Name</span>@if (here) { @Icons.Get("check", "menu-check") }</button>
+                                        }
                                     </form>
                                 }
-                            }
+                                <div class="menu-sep" role="separator"></div>
+                                @if (!Model.Archived)
+                                {
+                                    <form method="post" asp-page-handler="Archive" asp-route-folderId="@Model.FolderId" asp-route-unfiled="@Model.Unfiled"><input type="hidden" name="presentationId" value="@presentation.Id" /><button class="menu-item" type="submit">@Icons.Get("archive")<span>Archive</span></button></form>
+                                }
+                                <form method="post" asp-page-handler="Delete" asp-route-folderId="@Model.FolderId" asp-route-unfiled="@Model.Unfiled" asp-route-archived="@Model.Archived" data-confirm="Delete &quot;@presentation.Name&quot; and all its versions and files? It will be removed from every screen schedule. This cannot be undone."><input type="hidden" name="presentationId" value="@presentation.Id" /><input type="hidden" name="confirmed" value="false" /><button class="menu-item is-danger" type="submit">@Icons.Get("trash")<span>Delete permanently</span></button></form>
+                            </div>
                         </div>
                     </div>
-                    @if (failed || diagnostics is not null)
-                    {
-                        var summary = failed ? "Failure details" : "Diagnostics";
-                        if (diagnostics?.Warnings.Count > 0) summary += $" · {diagnostics.Warnings.Count} {(diagnostics.Warnings.Count == 1 ? "warning" : "warnings")}";
-                        if (diagnostics?.ElapsedMs is long elapsed) summary += $" · rendered in {Display.Duration(elapsed)}";
-                        <details class="disclosure diag">
-                            <summary>@Icons.Get("chevron-right")@summary</summary>
-                            <div class="diag-body">
-                                @if (failed)
-                                {
-                                    <div>
-                                        <h3>Failure</h3>
-                                        <p class="failure-code">@(version.FailureCode ?? "Unknown")</p>
-                                        @if (!string.IsNullOrWhiteSpace(version.FailureDetail)) { <pre class="log">@version.FailureDetail</pre> }
-                                    </div>
-                                }
-                                @if (diagnostics is not null && diagnostics.Raw is null)
-                                {
-                                    <dl class="kv">
-                                        <div><dt>Renderer</dt><dd>@(diagnostics.Renderer ?? "Unknown")</dd></div>
-                                        <div><dt>Render time</dt><dd>@(diagnostics.ElapsedMs is long ms ? Display.Duration(ms) : "Unknown")</dd></div>
-                                        <div><dt>Exit code</dt><dd>@(diagnostics.ExitCode?.ToString() ?? "Unknown")</dd></div>
-                                        <div><dt>Source hash</dt><dd><code title="@version.SourceSha256">@version.SourceSha256[..Math.Min(12, version.SourceSha256.Length)]</code></dd></div>
-                                    </dl>
-                                    <div>
-                                        <h3>Warnings</h3>
-                                        @if (diagnostics.Warnings.Count == 0)
-                                        {
-                                            <p class="muted">None</p>
-                                        }
-                                        else
-                                        {
-                                            <ul class="warning-list">@foreach (var warning in diagnostics.Warnings) { <li>@warning</li> }</ul>
-                                        }
-                                    </div>
-                                    @if (diagnostics.Fonts.Count > 0)
-                                    {
-                                        <div>
-                                            <h3>Fonts</h3>
-                                            <div class="chips">@foreach (var font in diagnostics.Fonts) { <span class="chip chip-static">@font</span> }</div>
+
+                    <div class="version-tray">
+                        <div class="version-tray-head">Versions <span class="count">@entry.Versions.Count</span></div>
+                        <ol class="version-list">
+                        @foreach (var version in entry.Versions)
+                        {
+                            var diagnostics = Signage.Web.Pages.Admin.PresentationsModel.ParseDiagnostics(version.DiagnosticsJson);
+                            var failed = version.Status == PresentationVersionStatus.Failed;
+                            var ready = version.Status == PresentationVersionStatus.Ready;
+                            <li class="version">
+                                <div class="version-row">
+                                    <div class="version-main">
+                                        <div class="version-line">
+                                            <span class="version-label">Version @version.VersionNumber</span>
+                                            @if (version.Id == presentation.CurrentVersionId) { <span class="tag tag-solid">Current</span> }
+                                            <span class="pill pill-@Display.StatusTone(version.Status)">@Display.StatusLabel(version.Status)</span>
                                         </div>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(diagnostics.Output))
-                                    {
-                                        <details class="disclosure">
-                                            <summary>@Icons.Get("chevron-right")Converter output</summary>
-                                            <pre class="log">@diagnostics.Output</pre>
-                                        </details>
-                                    }
-                                }
-                                else if (diagnostics?.Raw is not null)
+                                        <div class="version-meta">
+                                            @if (version.SlideCount > 0)
+                                            {
+                                                <span>@version.SlideCount @(version.SlideCount == 1 ? "slide" : "slides")</span>
+                                                if (version.TotalDurationMs > 0) { <span>@Display.Duration(version.TotalDurationMs) loop</span> }
+                                            }
+                                            else
+                                            {
+                                                <span>No slides yet</span>
+                                            }
+                                            <span>@(version.ReadyUtc is DateTimeOffset preparedUtc ? $"Prepared {Display.DateTime(preparedUtc)}" : $"Uploaded {Display.DateTime(version.CreatedUtc)}")</span>
+                                        </div>
+                                    </div>
+                                    <div class="version-actions">
+                                        @if (failed && !Model.Archived)
+                                        {
+                                            <form method="post" asp-page-handler="Retry"><input type="hidden" name="versionId" value="@version.Id" /><button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("refresh")Retry</button></form>
+                                        }
+                                        @if (ready)
+                                        {
+                                            <a class="btn btn-secondary btn-sm" asp-page="/Preview" asp-route-versionId="@version.Id">@Icons.Get("eye")Preview</a>
+                                            if (Model.Groups.Count > 0 && !Model.Archived)
+                                            {
+                                                <form method="post" asp-page-handler="Rollback" class="inline-form">
+                                                    <input type="hidden" name="versionId" value="@version.Id" />
+                                                    <select name="screenGroupId" aria-label="Screen group for version @version.VersionNumber of @presentation.Name">@foreach (var group in Model.Groups) { <option value="@group.Id">@group.Name</option> }</select>
+                                                    <button class="btn btn-secondary btn-sm" type="submit">@Icons.Get("send")Publish</button>
+                                                </form>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                                @if (failed || diagnostics is not null)
                                 {
-                                    <pre class="log">@diagnostics.Raw</pre>
+                                    var summary = failed ? "Failure details" : "Diagnostics";
+                                    if (diagnostics?.Warnings.Count > 0) summary += $" · {diagnostics.Warnings.Count} {(diagnostics.Warnings.Count == 1 ? "warning" : "warnings")}";
+                                    if (diagnostics?.ElapsedMs is long elapsed) summary += $" · rendered in {Display.Duration(elapsed)}";
+                                    <details class="disclosure diag @(failed ? "is-failed" : "")">
+                                        <summary>@Icons.Get("chevron-right")@summary</summary>
+                                        <div class="diag-body">
+                                            @if (failed)
+                                            {
+                                                <div>
+                                                    <h3>Failure</h3>
+                                                    <p class="failure-code">@(version.FailureCode ?? "Unknown")</p>
+                                                    @if (!string.IsNullOrWhiteSpace(version.FailureDetail)) { <pre class="log">@version.FailureDetail</pre> }
+                                                </div>
+                                            }
+                                            @if (diagnostics is not null && diagnostics.Raw is null)
+                                            {
+                                                <dl class="kv">
+                                                    <div><dt>Renderer</dt><dd>@(diagnostics.Renderer ?? "Unknown")</dd></div>
+                                                    <div><dt>Render time</dt><dd>@(diagnostics.ElapsedMs is long ms ? Display.Duration(ms) : "Unknown")</dd></div>
+                                                    <div><dt>Exit code</dt><dd>@(diagnostics.ExitCode?.ToString() ?? "Unknown")</dd></div>
+                                                    <div><dt>Source hash</dt><dd><code title="@version.SourceSha256">@version.SourceSha256[..Math.Min(12, version.SourceSha256.Length)]</code></dd></div>
+                                                </dl>
+                                                <div>
+                                                    <h3>Warnings</h3>
+                                                    @if (diagnostics.Warnings.Count == 0)
+                                                    {
+                                                        <p class="muted">None</p>
+                                                    }
+                                                    else
+                                                    {
+                                                        <ul class="warning-list">@foreach (var warning in diagnostics.Warnings) { <li>@warning</li> }</ul>
+                                                    }
+                                                </div>
+                                                @if (diagnostics.Fonts.Count > 0)
+                                                {
+                                                    <div>
+                                                        <h3>Fonts</h3>
+                                                        <div class="chips">@foreach (var font in diagnostics.Fonts) { <span class="chip chip-static">@font</span> }</div>
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(diagnostics.Output))
+                                                {
+                                                    <details class="disclosure">
+                                                        <summary>@Icons.Get("chevron-right")Converter output</summary>
+                                                        <pre class="log">@diagnostics.Output</pre>
+                                                    </details>
+                                                }
+                                            }
+                                            else if (diagnostics?.Raw is not null)
+                                            {
+                                                <pre class="log">@diagnostics.Raw</pre>
+                                            }
+                                        </div>
+                                    </details>
                                 }
-                            </div>
-                        </details>
-                    }
-                </div>
+                            </li>
+                        }
+                        </ol>
+                    </div>
+                </article>
             }
             </div>
-        </article>
-    }
-    </div>
-    <p class="card filter-empty" id="presentation-empty" hidden>No presentations match.</p>
-}
+            <p class="card filter-empty" id="presentation-empty" hidden>No presentations match.</p>
+        }
+        <p class="note">@Icons.Get("info")<span>Archiving keeps the PowerPoint and takes it off screen schedules. Restore it to the library, then publish it when needed. Deleting permanently removes every version and its files.</span></p>
+    </section>
+</div>

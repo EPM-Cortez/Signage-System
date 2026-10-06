@@ -23,7 +23,7 @@ public static class ContentApiEndpoints
             }
             await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
             var authorized = await db.Publications.AnyAsync(item =>
-                item.ScreenGroupId == device.ScreenGroupId && item.IsEnabled && item.PresentationVersion.ContentId == contentId,
+                item.ScreenGroupId == device.ScreenGroupId && item.IsEnabled && item.PresentationVersion.ContentId == contentId && item.PresentationVersion.Presentation.ArchivedUtc == null,
                 cancellationToken);
             if (!authorized)
             {

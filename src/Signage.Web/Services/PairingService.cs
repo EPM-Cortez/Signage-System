@@ -57,6 +57,8 @@ public sealed class PairingService(
         {
             return new PairingPollResult(false, null, null);
         }
+        if (session.ApprovedDevice is null || session.ApprovedDevice.ArchivedUtc is not null || session.ApprovedDevice.RevokedUtc is not null)
+            return null;
 
         var rawToken = protector.Unprotect(session.ProtectedDeviceToken);
         session.ProtectedDeviceToken = null;
@@ -65,10 +67,28 @@ public sealed class PairingService(
         return new PairingPollResult(true, rawToken, session.ApprovedDevice?.Name);
     }
 
-    public async Task<Guid> ApproveAsync(
+    public Task<Guid> ApproveAsync(
         string code,
         string deviceName,
         Guid screenGroupId,
+        string actor,
+        CancellationToken cancellationToken) =>
+        ApproveCoreAsync(code, deviceName, screenGroupId, null, actor, cancellationToken);
+
+    // Creates the group in the same save as the device, so a bad or expired code leaves no stray group behind.
+    public Task<Guid> ApproveIntoNewGroupAsync(
+        string code,
+        string deviceName,
+        string groupName,
+        string actor,
+        CancellationToken cancellationToken) =>
+        ApproveCoreAsync(code, deviceName, null, groupName, actor, cancellationToken);
+
+    private async Task<Guid> ApproveCoreAsync(
+        string code,
+        string deviceName,
+        Guid? screenGroupId,
+        string? newGroupName,
         string actor,
         CancellationToken cancellationToken)
     {
@@ -81,9 +101,17 @@ public sealed class PairingService(
         {
             throw new InvalidOperationException("The pairing code has expired or has already been used.");
         }
-        if (!await db.ScreenGroups.AnyAsync(item => item.Id == screenGroupId && !item.IsArchived, cancellationToken))
+        if (screenGroupId is { } existingGroupId)
         {
-            throw new InvalidOperationException("The selected screen group is unavailable.");
+            if (!await db.ScreenGroups.AnyAsync(item => item.Id == existingGroupId && !item.IsArchived, cancellationToken))
+            {
+                throw new InvalidOperationException("The selected screen group is unavailable.");
+            }
+        }
+        else
+        {
+            var group = await CreateGroupAsync(db, newGroupName!, actor, cancellationToken);
+            screenGroupId = group.Id;
         }
 
         var rawToken = TokenUtility.CreateToken(48);
@@ -91,7 +119,7 @@ public sealed class PairingService(
         {
             Id = Guid.NewGuid(),
             Name = string.IsNullOrWhiteSpace(deviceName) ? "New display" : deviceName.Trim(),
-            ScreenGroupId = screenGroupId,
+            ScreenGroupId = screenGroupId.Value,
             TokenHash = TokenUtility.Hash(rawToken),
             PairedUtc = timeProvider.GetUtcNow()
         };
@@ -111,5 +139,34 @@ public sealed class PairingService(
         });
         await db.SaveChangesAsync(cancellationToken);
         return device.Id;
+    }
+
+    private async Task<ScreenGroup> CreateGroupAsync(SignageDbContext db, string name, string actor, CancellationToken cancellationToken)
+    {
+        name = name.Trim();
+        var lowered = name.ToLower();
+        // Names are unique, archived groups included.
+        var existing = await db.ScreenGroups.AsNoTracking().FirstOrDefaultAsync(item => item.Name.ToLower() == lowered, cancellationToken);
+        if (existing is not null)
+        {
+            throw new InvalidOperationException(existing.IsArchived
+                ? $"An archived screen group is already called \"{existing.Name}\". Choose a different name."
+                : $"A screen group called \"{existing.Name}\" already exists. Choose it from the list instead.");
+        }
+
+        var group = new ScreenGroup { Id = Guid.NewGuid(), Name = name, CreatedUtc = timeProvider.GetUtcNow() };
+        db.ScreenGroups.Add(group);
+        db.AuditEvents.Add(new AuditEvent
+        {
+            Id = Guid.NewGuid(),
+            OccurredUtc = timeProvider.GetUtcNow(),
+            ActorType = "Human",
+            ActorId = actor,
+            Action = "ScreenGroupCreated",
+            EntityType = nameof(ScreenGroup),
+            EntityId = group.Id.ToString(),
+            Summary = $"Created {group.Name}."
+        });
+        return group;
     }
 }

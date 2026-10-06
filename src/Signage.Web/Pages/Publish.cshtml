@@ -9,6 +9,7 @@
 <form method="post" enctype="multipart/form-data" class="publish" data-publish-form>
     <div class="publish-steps">
         @if (!ViewData.ModelState.IsValid) { <div asp-validation-summary="All" class="validation" role="alert"></div> }
+        <div class="validation validation-summary-errors hidden" role="alert" data-upload-errors></div>
 
         <section class="card card-body">
             <div class="step-head"><span class="step-num">1</span><h2 id="screens-heading">Screen groups</h2></div>
@@ -76,6 +77,15 @@
             <div><dt>Timing</dt><dd data-summary-timing>As soon as it's ready</dd></div>
         </dl>
         <button class="btn btn-primary btn-lg btn-block" type="submit" data-submit>Publish</button>
+        <div class="upload hidden" data-upload>
+            <div class="upload-head">
+                <strong data-upload-title>Uploading</strong>
+                <span class="upload-percent" aria-live="off" data-upload-percent>0%</span>
+            </div>
+            <div class="progress progress-determinate" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-upload-bar><span></span></div>
+            <p class="upload-detail" aria-live="off" data-upload-detail></p>
+            <button class="btn btn-secondary btn-block" type="button" data-upload-cancel>Cancel upload</button>
+        </div>
         <p class="note">@Icons.Get("info")<span>Screens keep playing their current content until the new presentation is ready.</span></p>
     </aside>
 </form>

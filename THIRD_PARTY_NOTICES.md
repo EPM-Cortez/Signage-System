@@ -12,7 +12,9 @@ This product includes third-party software. The repository lockfiles are the aut
 | pptx-glimpse | 3.2.8 | MIT |
 | Carlito / Arimo / Tinos / Cousine / Caladea fonts | revisions in `fonts/README.md` | SIL Open Font License 1.1; per-family notices in `fonts/*/OFL.txt` |
 | fflate | 0.8.3 | MIT |
-| pngjs (test-only) | 7.0.0 | MIT |
+| pngjs | 7.0.0 | MIT |
+| jpeg-js | 0.4.4 | Apache-2.0 / BSD-3-Clause |
+| @resvg/resvg-wasm | 2.6.2 | MPL-2.0 |
 | Vite | 8.1.5 | MIT |
 | TypeScript | 7.0.2 | Apache-2.0 |
 | xUnit and Microsoft test tooling | see NuGet lockfiles | Apache-2.0 / MIT |

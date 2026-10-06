@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Signage.Application;
 using Signage.Infrastructure.Persistence;
 using Signage.Web.Services;
@@ -57,6 +58,9 @@ public static class HumanApiEndpoints
             Guid versionId,
             HttpContext context,
             IDbContextFactory<SignageDbContext> dbFactory,
+            ConversionProgressTracker progressTracker,
+            IOptions<SignageOptions> signageOptions,
+            TimeProvider timeProvider,
             CancellationToken cancellationToken) =>
         {
             await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
@@ -96,7 +100,9 @@ public static class HumanApiEndpoints
                             : publicationCount < targetCount ? $"Published to {publicationCount} of {targetCount} selected screen groups. Some group permissions changed during preparation; ask IT to review the skipped targets."
                                 : null
                         : null,
-                previewUrl = version.ContentId is null ? null : $"/Preview/{version.Id}"
+                previewUrl = version.ContentId is null ? null : $"/Preview/{version.Id}",
+                progress = DescribeProgress(version, progressTracker),
+                screens = published ? await DescribeScreensAsync(db, version.Id, timeProvider.GetUtcNow(), signageOptions.Value, cancellationToken) : null
             });
         });
 
@@ -126,5 +132,69 @@ public static class HumanApiEndpoints
             };
         });
         return app;
+    }
+
+    private static object? DescribeProgress(Domain.PresentationVersion version, ConversionProgressTracker tracker)
+    {
+        if (version.Status is not (Domain.PresentationVersionStatus.Uploaded or Domain.PresentationVersionStatus.Queued or Domain.PresentationVersionStatus.Converting))
+        {
+            return null;
+        }
+        var current = version.Status == Domain.PresentationVersionStatus.Converting ? tracker.Get(version.Id) : null;
+        if (current is null)
+        {
+            // Queued, or converting in a process that has since restarted: nothing measurable yet.
+            var waiting = version.Status == Domain.PresentationVersionStatus.Converting ? "Getting started"
+                : version.FailureCode is null ? "Waiting to start" : "Retrying after a problem";
+            return new { percent = (int?)null, nextPercent = (int?)null, stage = waiting, slidesRendered = 0, slideCount = 0 };
+        }
+        var stage = current.Stage switch
+        {
+            ConversionStage.Starting => "Opening the PowerPoint",
+            ConversionStage.Rendering when current.SlidesRendered < current.SlideCount => $"Preparing slide {current.SlidesRendered + 1} of {current.SlideCount}",
+            _ => "Packaging for the screens"
+        };
+        return new { percent = (int?)current.Percent, nextPercent = (int?)current.NextPercent, stage, slidesRendered = current.SlidesRendered, slideCount = current.SlideCount };
+    }
+
+    private static async Task<object> DescribeScreensAsync(
+        SignageDbContext db,
+        Guid versionId,
+        DateTimeOffset now,
+        SignageOptions options,
+        CancellationToken cancellationToken)
+    {
+        var groupIds = await db.Publications
+            .Where(item => item.PresentationVersionId == versionId && item.IsEnabled)
+            .Select(item => item.ScreenGroupId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var publications = await db.Publications.AsNoTracking()
+            .Where(item => groupIds.Contains(item.ScreenGroupId) && item.IsEnabled)
+            .ToListAsync(cancellationToken);
+        var own = publications.Where(item => item.PresentationVersionId == versionId).ToList();
+        // A screen only switches where this version is its group's active publication (same rule as /api/player/assignment).
+        var liveGroupIds = groupIds
+            .Where(id => Domain.PublicationRules.SelectActive(publications.Where(item => item.ScreenGroupId == id), now)?.PresentationVersionId == versionId)
+            .ToList();
+        var scheduledGroups = groupIds.Except(liveGroupIds).Count(id => own.Any(item => item.ScreenGroupId == id && item.StartsUtc > now));
+        var overriddenGroups = groupIds.Except(liveGroupIds).Count(id => own.Any(item => item.ScreenGroupId == id && item.StartsUtc <= now && (item.EndsUtc is null || item.EndsUtc > now)));
+        var devices = await db.Devices.AsNoTracking()
+            .Where(item => item.RevokedUtc == null && item.ArchivedUtc == null && item.ScreenGroupId != null && liveGroupIds.Contains(item.ScreenGroupId.Value))
+            .Select(item => new { item.LastSeenUtc, item.PlayingPresentationVersionId })
+            .ToListAsync(cancellationToken);
+        var offlineBefore = now.AddSeconds(-options.OfflineAfterSeconds);
+        var online = devices.Where(item => item.LastSeenUtc >= offlineBefore).ToList();
+        return new
+        {
+            total = devices.Count,
+            showing = online.Count(item => item.PlayingPresentationVersionId == versionId),
+            offline = devices.Count - online.Count,
+            liveGroups = liveGroupIds.Count,
+            scheduledGroups,
+            overriddenGroups,
+            nextStartUtc = own.Where(item => item.StartsUtc > now).Select(item => (DateTimeOffset?)item.StartsUtc).Min(),
+            checkSeconds = options.PlayerPollSeconds
+        };
     }
 }
